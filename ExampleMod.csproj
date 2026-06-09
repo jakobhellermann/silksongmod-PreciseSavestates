@@ -23,6 +23,7 @@
         <PackageIcon>icon.png</PackageIcon>
         <RepositoryUrl>https://github.com/YourGitHubUsername/ExampleMod</RepositoryUrl>
     </PropertyGroup>
+
     <ItemGroup>
         <PackageReference Include="BepInEx.Analyzers" Version="1.0.8" PrivateAssets="all"/>
         <PackageReference Include="BepInEx.Core" Version="5.4.21"/>
@@ -34,13 +35,28 @@
                 Include="UnityEngine.Modules"
                 Version="6000.0.50"
                 IncludeAssets="compile"
+                ExcludeAssets="$(ExcludeAssetsIfLocalReference)"
         />
         <PackageReference
                 Include="Silksong.GameLibs"
                 Version="*-*"
                 PrivateAssets="all"
-
+                ExcludeAssets="$(ExcludeAssetsIfLocalReference)"
         />
+    </ItemGroup>
+
+    <PropertyGroup Condition="Exists('$(ManagedDir)')">
+        <ExcludeAssetsIfLocalReference>compile</ExcludeAssetsIfLocalReference>
+    </PropertyGroup>
+    <Target Name="ValidateManagedDir" BeforeTargets="BeforeBuild">
+        <Error Condition="'$(ManagedDir)' != '' And !Exists('$(ManagedDir)')" Text="ManagedDir '$(ManagedDir)' does not exist."/>
+    </Target>
+    <ItemGroup Condition="Exists('$(ManagedDir)')">
+        <LocalReferences
+                Include="$(ManagedDir)/*.dll"
+                Exclude="$(ManagedDir)/Mono*.dll;$(ManagedDir)/netstandard.dll;$(ManagedDir)/System*.dll;$(ManagedDir)/mscorlib.dll"
+        />
+        <Reference Include="@(LocalReferences)" Private="false"/>
     </ItemGroup>
 
     <ItemGroup>
