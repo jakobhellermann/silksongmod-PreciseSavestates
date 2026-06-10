@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using DevUtils.Toasts;
 using GlobalEnums;
 using HarmonyLib;
 using PreciseSavestates.Savestates.Snapshot;
@@ -169,9 +170,11 @@ public static class SavestateLogic {
     private static TaskCompletionSource<bool>? sceneLoadedSource;
 
     public static async Task Load(Savestate savestate, SavestateLoadMode loadMode) {
+        var total = Stopwatch.StartNew();
         try {
             IsLoadingSavestate = true;
             await LoadInner(savestate, loadMode);
+            ToastManager.Toast($"Loaded in {total.ElapsedMilliseconds}ms");
         } finally {
             IsLoadingSavestate = false;
         }
