@@ -1,0 +1,9 @@
+[package]
+name = "savestate-bisect"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde_json = { version = "1.0.150", features = ["preserve_order"] }
+ctrlc = "3.5.2"
+crossterm = "0.29.0"
