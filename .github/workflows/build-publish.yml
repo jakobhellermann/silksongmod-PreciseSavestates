@@ -48,7 +48,7 @@ jobs:
     - name: Get Version
       id: version
       run: |-
-        VERSION=$(dotnet build ExampleMod.csproj -getProperty:Version)
+        VERSION=$(dotnet build PreciseSavestates.csproj -getProperty:Version)
         echo Version is $VERSION
         echo "version=$VERSION" >> $GITHUB_OUTPUT
     - name: Upload thunderstore artifact

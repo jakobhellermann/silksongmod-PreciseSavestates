@@ -1,3 +1,3 @@
-# ExampleMod
+# PreciseSavestates
 
 A Hollow Knight: Silksong mod.

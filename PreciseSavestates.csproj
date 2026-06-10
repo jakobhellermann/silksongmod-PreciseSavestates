@@ -21,7 +21,7 @@
 
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageIcon>icon.png</PackageIcon>
-        <RepositoryUrl>https://github.com/YourGitHubUsername/ExampleMod</RepositoryUrl>
+        <RepositoryUrl>https://github.com/jakobhellermann/PreciseSavestates</RepositoryUrl>
     </PropertyGroup>
 
     <ItemGroup>
@@ -77,7 +77,7 @@
         <!-- Local install -->
         <Copy
                 SourceFiles="@(Binaries)"
-                DestinationFolder="$(SilksongPluginsFolder)/YourGitHubUsername-$(AssemblyTitle)/%(Binaries.LocalDir)"
+                DestinationFolder="$(SilksongPluginsFolder)/jakobhellermann-$(AssemblyTitle)/%(Binaries.LocalDir)"
                 Condition="'$(SilksongPluginsFolder)' != '' And Exists('$(SilksongPluginsFolder)')"
         />
 

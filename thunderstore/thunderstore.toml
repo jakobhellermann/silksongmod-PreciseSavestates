@@ -3,12 +3,12 @@ schemaVersion = "0.0.1"
 
 [package]
 # The name of the team you are publishing as
-namespace = "YourGitHubUsername"
+namespace = "jakobhellermann"
 # max 250 characters
 description = "Example mod description"
 
 # Replace this with a correct repo URL if the default is not accurate
-websiteUrl = "https://github.com/YourGitHubUsername/ExampleMod"
+websiteUrl = "https://github.com/jakobhellermann/PreciseSavestates"
 containsNsfwContent = false
 
 
