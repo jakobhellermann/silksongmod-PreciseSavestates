@@ -162,9 +162,10 @@ internal class RefConverter(int dummy) : JsonConverter {
         writer.WriteEndObject();
     }
 
-    private static Component? ReadReference(JsonReader reader) {
+    // returns (found: true, null) for explicit null, (found: false, null) for unresolvable ref
+    private static (bool found, Component? value) ReadReference(JsonReader reader) {
         if (reader.TokenType == JsonToken.Null) {
-            return null;
+            return (true, null);
         }
 
         if (reader.TokenType != JsonToken.StartObject) {
@@ -187,7 +188,8 @@ internal class RefConverter(int dummy) : JsonConverter {
         while (reader.Read() && reader.TokenType != JsonToken.EndObject) {
         }
 
-        return ObjectUtils.LookupObjectComponentPath(refPath);
+        var resolved = ObjectUtils.LookupObjectComponentPath(refPath);
+        return resolved != null ? (true, resolved) : (false, null);
     }
 
     private static IEnumerable<Component?> ReadReferenceArray(JsonReader reader) {
@@ -198,7 +200,12 @@ internal class RefConverter(int dummy) : JsonConverter {
         reader.Read();
 
         while (reader.TokenType != JsonToken.EndArray) {
-            yield return ReadReference(reader);
+            var (found, value) = ReadReference(reader);
+            if (!found) {
+                Log.Warning($"Could not resolve $ref in array at {reader.Path}, skipping element");
+            }
+
+            yield return value;
 
             reader.Read();
         }
@@ -277,7 +284,13 @@ internal class RefConverter(int dummy) : JsonConverter {
         }
 
         if (typeof(Component).IsAssignableFrom(type)) {
-            return ReadReference(reader);
+            var (found, value) = ReadReference(reader);
+            if (!found) {
+                Log.Warning($"Could not resolve $ref for {type.Name}, keeping existing value");
+                return existingValue;
+            }
+
+            return value;
         }
 
         throw new NotImplementedException($"RefConverter called for {type}");
