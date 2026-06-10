@@ -11,6 +11,7 @@ using Newtonsoft.Json.Serialization;
 using PreciseSavestates.Source;
 using PreciseSavestates.Utils;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace PreciseSavestates.Savestates;
 
@@ -80,6 +81,42 @@ public class CustomizableContractResolver : DefaultContractResolver {
                Array.Exists(FieldTypesToIgnore, x => x.IsAssignableFrom(type));
     }
 
+    // Returns true if at least one of the type's members is ignored during serialization
+    // (e.g. a ScriptableObject or GameObject field), so a round-trip can't reproduce the full instance.
+    private bool HasUnserializableContent(Type type) {
+        if (type.IsPrimitive || type.IsEnum || type.IsValueType || type == typeof(string)) {
+            return false;
+        }
+
+        if (typeof(Object).IsAssignableFrom(type)) {
+            return false;
+        }
+
+        if (RefType(type)) {
+            return false;
+        }
+
+        var members = GetSerializableMembers(type);
+        foreach (var m in members) {
+            var memberType = m is FieldInfo fi ? fi.FieldType : ((PropertyInfo)m).PropertyType;
+            var inner = memberType;
+            if (inner.IsArray) {
+                inner = inner.GetElementType()!;
+            } else if (inner.IsGenericType) {
+                var def = inner.GetGenericTypeDefinition();
+                if (def == typeof(List<>) || def == typeof(HashSet<>)) {
+                    inner = inner.GetGenericArguments()[0];
+                }
+            }
+
+            if (IgnorePropertyType(inner)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     protected override JsonProperty CreateProperty(MemberInfo member, MemberSerialization memberSerialization) {
         // default MemberSerialization ignores private fields, unless DefaultMembersSearchFlags.NonPublic ist set,
         // but that field is deprecated in favor of GetSerializableMembers.
@@ -101,14 +138,19 @@ public class CustomizableContractResolver : DefaultContractResolver {
         }
 
         var itemType = type;
+        // collections deserialize by replacing elements with fresh instances, so a type with ignored
+        // (unserializable) members loses those refs. plain object fields are populated in-place, so they're safe.
+        var isCollection = false;
 
         if (type.IsArray) {
             itemType = type.GetElementType()!;
             shouldSerialize &= !IgnorePropertyType(itemType);
+            isCollection = true;
         } else if (type.IsGenericType) {
             if (type.GetGenericTypeDefinition() == typeof(List<>)) {
                 itemType = type.GetGenericArguments()[0];
                 shouldSerialize &= !IgnorePropertyType(itemType);
+                isCollection = true;
 
                 property.ObjectCreationHandling = ObjectCreationHandling.Replace;
             }
@@ -119,11 +161,13 @@ public class CustomizableContractResolver : DefaultContractResolver {
                 shouldSerialize &= generics[0].IsPrimitive || generics[0] == typeof(string);
                 itemType = type.GetGenericArguments()[1];
                 shouldSerialize &= !IgnorePropertyType(itemType);
+                isCollection = true;
             }
 
             if (type.GetGenericTypeDefinition() == typeof(HashSet<>)) {
                 itemType = type.GetGenericArguments()[0];
                 shouldSerialize &= !IgnorePropertyType(itemType);
+                isCollection = true;
             }
         }
 
@@ -133,6 +177,12 @@ public class CustomizableContractResolver : DefaultContractResolver {
 
         if (ContainerTypesToIgnore.Contains(member.DeclaringType)) {
             shouldSerialize = false;
+        }
+
+        if (shouldSerialize && isCollection && HasUnserializableContent(itemType)) {
+            shouldSerialize = false;
+            Log.Warning(
+                $"Auto-skipping {member.DeclaringType?.Name}.{member.Name}: {itemType.Name} has unserializable members");
         }
 
         property.ShouldSerialize = _ => shouldSerialize;
