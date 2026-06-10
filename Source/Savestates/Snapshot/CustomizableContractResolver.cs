@@ -54,9 +54,8 @@ public class CustomizableContractResolver : DefaultContractResolver {
             list.AddRange(ty
                 .GetProperties(PropertyBindingFlags | BindingFlags.DeclaredOnly)
                 .Where(prop => prop.CanWrite && prop.CanRead
-                                             && (prop.GetGetMethod() is { IsVirtual: true } ||
-                                                 prop.GetCustomAttribute<NativePropertyAttribute>() != null)));
-
+                                             && prop.GetGetMethod() is { IsVirtual: true }));
+            /* || prop.GetCustomAttribute<NativePropertyAttribute>() != null TODO */
             // TODO: just removed added from this type
             if (FieldDenylist.TryGetValue(ty, out var denyList)) {
                 list.RemoveAll(field => denyList.Contains(field.Name));
