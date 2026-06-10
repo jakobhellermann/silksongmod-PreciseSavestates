@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using JetBrains.Annotations;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
 using PreciseSavestates.Source;
 using PreciseSavestates.Utils;
@@ -148,6 +149,8 @@ public class CustomizableContractResolver : DefaultContractResolver {
 #pragma warning disable CS9113 // Parameter is unread.
 internal class RefConverter(int dummy) : JsonConverter {
 #pragma warning restore CS9113 // Parameter is unread.
+    public const bool RestoreRefs = true;
+
     public static HashSet<Component> References = [];
 
     private static void WriteReference(JsonWriter writer, object? component) {
@@ -239,6 +242,11 @@ internal class RefConverter(int dummy) : JsonConverter {
 
     public override object? ReadJson(JsonReader reader, Type type, object? existingValue,
         JsonSerializer serializer) {
+        if (!RestoreRefs) {
+            JToken.ReadFrom(reader);
+            return existingValue;
+        }
+
         if (reader.TokenType == JsonToken.Null) {
             return null;
         }
