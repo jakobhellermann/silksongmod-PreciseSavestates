@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using HutongGames.PlayMaker;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
@@ -20,8 +21,9 @@ public class Savestate {
 
     public List<ComponentSnapshot>? ComponentSnapshots;
 
+    public List<PlayMakerFsmSnapshot>? FsmSnapshots;
+
     // public List<GameObjectSnapshot>? GameObjectSnapshots;
-    // public List<MonsterLoveFsmSnapshot>? FsmSnapshots;
     // public List<GeneralFsmSnapshot>? GeneralFsmSnapshots;
     // public JObject? Flags;
     public Random.State? RandomState;
@@ -125,6 +127,142 @@ public class ComponentSnapshot {
     }
 }
 
+// Snapshots a PlayMaker FSM's runtime state: active state, variable values, and per-action runtime fields
+// (timers etc.). Restored by directly setting the active state (no OnEnter actions), populating live variable
+// and action instances in-place — the FSM definition (states/actions arrays) comes from the prefab and is
+// matched by index/name, never re-created (which would break action<->variable wiring).
+public class PlayMakerFsmSnapshot {
+    public required string Path;
+    public required string FsmName;
+    public required string ActiveState;
+    public required Dictionary<string, JToken> Variables;
+    public required List<FsmActionSnapshot> Actions;
+
+    // variable types whose value can be serialized by value; refs (GameObject/Object/Material/Texture) and
+    // complex containers (Array) are skipped — they're prefab-wired, not runtime state.
+    private static bool IsSerializableVariable(VariableType type) {
+        return type is VariableType.Float or VariableType.Int
+            or VariableType.Bool or VariableType.String or VariableType.Vector2 or VariableType.Vector3
+            or VariableType.Color or VariableType.Rect or VariableType.Quaternion or VariableType.Enum;
+    }
+
+    public static PlayMakerFsmSnapshot Of(PlayMakerFSM fsmComponent) {
+        var fsm = fsmComponent.Fsm;
+
+        var variables = new Dictionary<string, JToken>();
+        foreach (var v in fsm.Variables.GetAllNamedVariables()) {
+            if (!IsSerializableVariable(v.VariableType)) {
+                continue;
+            }
+
+            object? raw;
+            try {
+                raw = v.RawValue;
+            } catch (Exception e) {
+                Log.Warning($"Could not read FSM variable {fsm.Name}.{v.Name}: {e.Message}");
+                continue;
+            }
+
+            variables[v.Name] = raw == null ? JValue.CreateNull() : SnapshotSerializer.Snapshot(raw);
+        }
+
+        // only the active state has actions mid-execution with meaningful runtime state (timers etc.); actions in
+        // other states are re-initialized by OnEnter when next entered, so capturing them is just bloat.
+        var actions = new List<FsmActionSnapshot>();
+        var states = fsm.States;
+        var activeStateIndex = Array.FindIndex(states, s => s.Name == fsm.ActiveStateName);
+        if (activeStateIndex >= 0) {
+            var stateActions = states[activeStateIndex].Actions;
+            for (var ai = 0; ai < stateActions.Length; ai++) {
+                actions.Add(new FsmActionSnapshot {
+                    StateIndex = activeStateIndex,
+                    ActionIndex = ai,
+                    Data = SnapshotSerializer.Snapshot(stateActions[ai]),
+                });
+            }
+        }
+
+        return new PlayMakerFsmSnapshot {
+            Path = ObjectUtils.ObjectPath(fsmComponent.gameObject),
+            FsmName = fsm.Name,
+            ActiveState = fsm.ActiveStateName,
+            Variables = variables,
+            Actions = actions,
+        };
+    }
+
+    public bool Restore() {
+        var go = ObjectUtils.LookupPath(Path);
+        if (!go) {
+            Log.Error($"Savestate stored FSM state on {Path}, which does not exist at load time");
+            return false;
+        }
+
+        // multiple PlayMakerFSMs can live on one GameObject, so disambiguate by FsmName
+        var fsmComponent = go.GetComponents<PlayMakerFSM>().FirstOrDefault(f => f.Fsm.Name == FsmName);
+        if (fsmComponent == null) {
+            Log.Error($"Savestate stored FSM '{FsmName}' on {Path}, which has no such PlayMakerFSM");
+            return false;
+        }
+
+        var fsm = fsmComponent.Fsm;
+
+        // set variables by name into the live (prefab-wired) instances
+        foreach (var v in fsm.Variables.GetAllNamedVariables()) {
+            if (!Variables.TryGetValue(v.Name, out var tok)) {
+                continue;
+            }
+
+            try {
+                if (tok.Type == JTokenType.Null) {
+                    v.RawValue = null;
+                } else {
+                    var targetType = v.RawValue?.GetType();
+                    v.RawValue = targetType != null
+                        ? SnapshotSerializer.Deserialize(tok, targetType)
+                        : tok.ToObject<object>();
+                }
+            } catch (Exception e) {
+                Log.Warning($"Could not restore FSM variable {FsmName}.{v.Name}: {e.Message}");
+            }
+        }
+
+        // populate action runtime fields (timers etc.) in-place, matched by index against the prefab definition
+        var states = fsm.States;
+        foreach (var a in Actions) {
+            if (a.StateIndex >= states.Length) {
+                continue;
+            }
+
+            var stateActions = states[a.StateIndex].Actions;
+            if (a.ActionIndex >= stateActions.Length) {
+                continue;
+            }
+
+            SnapshotSerializer.Populate(stateActions[a.ActionIndex], a.Data);
+        }
+
+        // restore the active state directly, without re-running OnEnter actions: Fsm.Update only calls Continue()
+        // (which enters the state) when !activeStateEntered, so setting the flag makes it resume UpdateState instead.
+        var targetState = fsm.GetState(ActiveState);
+        if (targetState == null) {
+            Log.Warning($"FSM {FsmName} has no state '{ActiveState}', leaving active state unchanged");
+        } else {
+            fsm.SetFieldValue("activeState", targetState);
+            fsm.SetFieldValue("activeStateName", ActiveState);
+            fsm.SetFieldValue("activeStateEntered", true);
+        }
+
+        return true;
+    }
+}
+
+public class FsmActionSnapshot {
+    public required int StateIndex;
+    public required int ActionIndex;
+    public required JToken Data;
+}
+
 /*
 public class GeneralFsmSnapshot {
     public required string Path;
@@ -133,16 +271,6 @@ public class GeneralFsmSnapshot {
     public static GeneralFsmSnapshot Of(StateMachineOwner owner) => new() {
         Path = ObjectUtils.ObjectPath(owner.gameObject),
         CurrentState = owner.FsmContext.fsm.State.name,
-    };
-}
-
-public class MonsterLoveFsmSnapshot {
-    public required string Path;
-    public required object CurrentState;
-
-    public static MonsterLoveFsmSnapshot Of(IStateMachine machine) => new() {
-        Path = ObjectUtils.ObjectPath(machine.Component.gameObject),
-        CurrentState = machine.CurrentStateMap.stateObj,
     };
 }
 
