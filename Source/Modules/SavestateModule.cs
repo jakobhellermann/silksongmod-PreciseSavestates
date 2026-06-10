@@ -33,6 +33,8 @@ public class SavestateModule(
     public bool CreateSavestate(string name, int slot, string layer, SavestateFilter? filter = null) {
         try {
             var sw = Stopwatch.StartNew();
+            // Pause() sets acceptingInput=false; restore it before snapshotting so the field captures the in-game value
+            HeroController.instance.AcceptInput();
             var savestate = SavestateLogic.Create(filter ?? currentFilter);
             savestates.Save(name, savestate, slot, layer);
             Log.Info($"Created savestate {name} in {sw.ElapsedMilliseconds}ms");
