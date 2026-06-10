@@ -384,6 +384,14 @@
           "Microsoft.NETCore.Targets": "1.1.0",
           "System.Runtime": "4.3.0"
         }
+      },
+      "devutils": {
+        "type": "Project",
+        "dependencies": {
+          "BepInEx.Core": "[5.4.21, )",
+          "HarmonyX": "[2.9.0, )",
+          "UnityEngine.Modules": "[6000.0.50, )"
+        }
       }
     }
   }
