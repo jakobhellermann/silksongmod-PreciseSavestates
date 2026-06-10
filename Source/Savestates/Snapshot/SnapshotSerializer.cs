@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using HutongGames.PlayMaker;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
@@ -62,6 +64,10 @@ public static class SnapshotSerializer {
 
     public static JToken Snapshot(object obj) {
         return JToken.FromObject(obj, JsonSerializer.Create(Settings));
+    }
+
+    public static object? Deserialize(JToken token, Type type) {
+        return token.ToObject(type, JsonSerializer.Create(Settings));
     }
 
     public static string SnapshotToString(object? obj) {
@@ -132,13 +138,31 @@ public static class SnapshotSerializer {
             typeof(LayerMask), // maybe
             typeof(Collider2D), // maybe
             typeof(ScriptableObject),
+            // PlayMaker: when snapshotting FSM action runtime fields, skip the definition graph and back-refs so
+            // only primitive runtime state (timers etc.) is captured. NamedVariable covers FsmFloat/FsmBool/etc.;
+            // variable values are snapshotted separately by name in PlayMakerFsmSnapshot.
+            typeof(Fsm),
+            typeof(FsmState),
+            typeof(NamedVariable),
+            typeof(FsmEvent),
+            // cached reflection metadata (e.g. CallMethod's cachedMethodInfo/cachedType/cachedParameterInfo) is a
+            // lazily-rebuilt performance cache, not runtime state — and MethodInfo etc. can't be deserialized anyway.
+            typeof(MemberInfo),
+            typeof(ParameterInfo),
         ],
         ExactFieldTypesToIgnore = [typeof(Component)],
         FieldAllowlist = new Dictionary<Type, string[]> {
             { typeof(Transform), ["localPosition", "localRotation", "localScale"] },
             { typeof(Rigidbody2D), ["position", "linearVelocity"] },
         },
-        FieldDenylist = new Dictionary<Type, string[]>(),
+        FieldDenylist = new Dictionary<Type, string[]> {
+            // FsmStateAction base boilerplate: definition/wiring that never changes at runtime, repeated on every
+            // action. Keep only the runtime flags (active, finished); subclass runtime fields (timer etc.) are kept.
+            {
+                typeof(FsmStateAction),
+                ["name", "enabled", "isOpen", "autoName", "blocksFinish", "fsmComponent", "Enabled", "Name"]
+            },
+        },
     };
 
     internal static void RemoveNullFields(JToken token, params string[] fields) {

@@ -51,20 +51,25 @@ public static class SavestateLogic {
 
         var seen = new HashSet<Component>();
         var sceneBehaviours = new List<ComponentSnapshot>();
+        var fsmSnapshots = new List<PlayMakerFsmSnapshot>();
 
         if (filter.HasFlag(SavestateFilter.Player)) {
             sceneBehaviours.Add(ComponentSnapshot.Of(player.transform));
             sceneBehaviours.Add(ComponentSnapshot.Of(player.GetFieldValue<Rigidbody2D>("rb2d")!));
             SnapshotSerializer.SnapshotRecursive(player, sceneBehaviours, seen, 0);
-            /*foreach (var (_, state) in player.fsm.GetStates()) {
-                SnapshotSerializer.SnapshotRecursive(state, sceneBehaviours, seen, 0);
-            }*/
+
+            // PlayMaker FSM runtime state (sprint, tools, etc.) lives in separate PlayMakerFSM components, not in
+            // HeroController fields — capture it so e.g. a savestate taken mid-sprint restores correctly.
+            foreach (var fsm in player.GetComponents<PlayMakerFSM>()) {
+                fsmSnapshots.Add(PlayMakerFsmSnapshot.Of(fsm));
+            }
             // SnapshotSerializer.SnapshotRecursive(CameraManager.Instance.camera2D, sceneBehaviours, seen, 0);
         }
 
         var savestate = new Savestate {
             Scene = gm.sceneName,
             ComponentSnapshots = sceneBehaviours,
+            FsmSnapshots = fsmSnapshots,
             RandomState = Random.state,
         };
 
@@ -208,6 +213,15 @@ public static class SavestateLogic {
             }
 
             Log.Info($"- Applied snapshots to scene in {sw.ElapsedMilliseconds}ms");
+        }
+
+        if (savestate.FsmSnapshots != null) {
+            sw.Restart();
+            foreach (var fsm in savestate.FsmSnapshots) {
+                fsm.Restore();
+            }
+
+            Log.Info($"- Applied FSM snapshots in {sw.ElapsedMilliseconds}ms");
         }
     }
 
