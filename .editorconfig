@@ -2,8 +2,11 @@
 insert_final_newline = true
 
 csharp_new_line_before_open_brace = none
+csharp_new_line_before_else = false
 csharp_new_line_before_catch = false
 csharp_new_line_before_finally = false
+
+resharper_csharp_trailing_comma_in_multiline_lists = true
 
 dotnet_naming_symbols.private_const_fields.applicable_kinds = field
 dotnet_naming_symbols.private_const_fields.applicable_accessibilities = private
@@ -24,3 +27,10 @@ dotnet_naming_rule.private_fields_rule.style = camel_case_style
 dotnet_naming_rule.private_fields_rule.severity = suggestion
 
 resharper_parameter_hides_member_highlighting = none
+
+csharp_prefer_braces = true:suggestion
+resharper_csharp_braces_for_ifelse = required
+resharper_csharp_braces_for_for = required
+resharper_csharp_braces_for_foreach = required
+resharper_csharp_braces_for_while = required
+
