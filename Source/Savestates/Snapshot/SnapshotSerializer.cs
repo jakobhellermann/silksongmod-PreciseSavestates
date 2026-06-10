@@ -86,7 +86,10 @@ public static class SnapshotSerializer {
     }
 
     private static readonly JsonSerializerSettings Settings = new() {
-        ReferenceLoopHandling = ReferenceLoopHandling.Serialize,
+        // Error (not Serialize) so reference loops are detected and logged via the Error handler below instead of
+        // being followed forever (Serialize stack-overflows on PlayMaker action graphs). Each logged loop tells us
+        // which type to add a field ignore for, rather than silently dropping it like Ignore would.
+        ReferenceLoopHandling = ReferenceLoopHandling.Error,
         Error = (_, args) => {
             args.ErrorContext.Handled = true;
             Log.Error(
@@ -145,6 +148,9 @@ public static class SnapshotSerializer {
             typeof(FsmState),
             typeof(NamedVariable),
             typeof(FsmEvent),
+            // back-references from action helpers (e.g. EventResponder.stateAction) point at other actions and form
+            // reference loops — they're structural, not runtime state, so ignore any field typed as an action.
+            typeof(FsmStateAction),
             // cached reflection metadata (e.g. CallMethod's cachedMethodInfo/cachedType/cachedParameterInfo) is a
             // lazily-rebuilt performance cache, not runtime state — and MethodInfo etc. can't be deserialized anyway.
             typeof(MemberInfo),
@@ -153,7 +159,7 @@ public static class SnapshotSerializer {
         ExactFieldTypesToIgnore = [typeof(Component)],
         FieldAllowlist = new Dictionary<Type, string[]> {
             { typeof(Transform), ["localPosition", "localRotation", "localScale"] },
-            { typeof(Rigidbody2D), ["position", "linearVelocity"] },
+            { typeof(Rigidbody2D), ["position", "linearVelocity", "gravityScale"] },
         },
         FieldDenylist = new Dictionary<Type, string[]> {
             // FsmStateAction base boilerplate: definition/wiring that never changes at runtime, repeated on every
