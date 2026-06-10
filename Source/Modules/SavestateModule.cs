@@ -70,7 +70,7 @@ public class SavestateModule(
 
     private void UiSaveToSlot(int slot) {
         var scene = SceneManager.GetActiveScene().name;
-        var defaultName = $"{scene} {DateTime.Now:yyyy-MM-dd HH-mm-ss}";
+        var defaultName = scene;
         CreateSavestate(defaultName, slot, savestateLayer);
     }
 
