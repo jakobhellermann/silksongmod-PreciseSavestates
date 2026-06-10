@@ -26,7 +26,17 @@ public static class ObjectUtils {
         }
 
         var objectPath = ObjectPath(component!.gameObject);
-        return $"{objectPath}@{component.GetType().Name}";
+        var type = component.GetType();
+
+        // a GameObject can hold multiple components of the same type (e.g. the hero's many PlayMakerFSMs) — without
+        // an index they'd all share one path and a $ref restore would resolve every one to the first component.
+        var sameType = component.gameObject.GetComponents(type);
+        if (sameType.Length > 1) {
+            var index = Array.IndexOf(sameType, component);
+            return $"{objectPath}@{type.Name}:{index}";
+        }
+
+        return $"{objectPath}@{type.Name}";
     }
 
     public static GameObject? LookupPath(string path) {
@@ -84,7 +94,7 @@ public static class ObjectUtils {
 
 
     public static Component? LookupObjectComponentPath(string path) {
-        var (objectPath, componentName) = path.SplitOnce('@') ??
+        var (objectPath, componentSpec) = path.SplitOnce('@') ??
                                           throw new Exception($"Object-Component path contains no component: {path}");
 
         var obj = LookupPath(objectPath);
@@ -92,8 +102,23 @@ public static class ObjectUtils {
             return null;
         }
 
+        // componentSpec is "TypeName" or, for disambiguated same-type components, "TypeName:index"
+        var componentName = componentSpec;
+        int? index = null;
+        var colon = componentSpec.IndexOf(':');
+        if (colon >= 0) {
+            componentName = componentSpec[..colon];
+            if (int.TryParse(componentSpec[(colon + 1)..], out var i)) {
+                index = i;
+            }
+        }
+
         // PERF
-        var components = obj.GetComponents<Component>();
-        return components.FirstOrDefault(c => c.GetType().Name == componentName);
+        var matches = obj.GetComponents<Component>().Where(c => c.GetType().Name == componentName).ToArray();
+        if (index is { } idx) {
+            return idx < matches.Length ? matches[idx] : null;
+        }
+
+        return matches.FirstOrDefault();
     }
 }
