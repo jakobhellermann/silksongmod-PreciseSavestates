@@ -11,6 +11,9 @@ namespace PreciseSavestates.Source;
 public partial class PreciseSavestatesPlugin : BaseUnityPlugin {
     public static PreciseSavestatesPlugin Instance = null!;
 
+    /// Public API surface for other mods, accessed via reflection (see PreciseSavestates.Interop).
+    public Interop Interop = null!;
+
     private Harmony harmony = null!;
     private SavestateModule? savestateModule;
 
@@ -29,6 +32,7 @@ public partial class PreciseSavestatesPlugin : BaseUnityPlugin {
                 Config.Bind("Savestates", "Page next", new KeyboardShortcut(KeyCode.RightArrow)),
                 Config.Bind("Savestates", "Page prev", new KeyboardShortcut(KeyCode.LeftArrow))
             );
+            Interop = new Interop(savestateModule);
         } catch (Exception e) {
             Log.Info($"Plugin {Name} ({Id}) failed to initialize: {e}");
         }
