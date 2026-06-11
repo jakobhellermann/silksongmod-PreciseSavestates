@@ -10,10 +10,11 @@ namespace PreciseSavestates.Savestates;
 
 public record SavestateInfo(
     string Path,
+    string Slot,
     int? Index,
     string? Name
 ) {
-    public string FullName => $"{Index}-{Name}";
+    public string FullName => $"{Slot}-{Name}";
 }
 
 internal class SavestateStore {
@@ -30,34 +31,32 @@ internal class SavestateStore {
         return Path.Join(LayerDir(layer), $"{slot}.json");
     }
 
-    public IEnumerable<SavestateInfo> List(int? slot = null, string? layer = null) {
-        var pattern = slot != null ? $"{slot}-*.json" : "*.json";
+    public IEnumerable<SavestateInfo> List(string? slot = null, string? layer = null) {
         var dir = LayerDir(layer);
         if (!Directory.Exists(dir)) {
             return [];
         }
 
-        return Directory.GetFiles(dir, pattern)
+        // Parse the slot out of each file and filter in code, so both `{slot}.json` and `{slot}-{name}.json`
+        // are matched (a glob like `{slot}-*.json` would miss the name-less form).
+        var infos = Directory.GetFiles(dir, "*.json")
             .Select(path => {
-                if (SplitOnce(Path.GetFileNameWithoutExtension(path), '-') is not var (ord, name)) {
-                    return new SavestateInfo(path, null, "");
-                }
-
-                if (!int.TryParse(ord, out var i)) {
-                    return new SavestateInfo(path, null, "");
-                }
-
-                return new SavestateInfo(path, i, name);
+                var stem = Path.GetFileNameWithoutExtension(path);
+                var (parsedSlot, name) = SplitOnce(stem, '-') ?? (stem, "");
+                int? index = int.TryParse(parsedSlot, out var i) ? i : null;
+                return new SavestateInfo(path, parsedSlot, index, name);
             });
+
+        return slot != null ? infos.Where(info => info.Slot == slot) : infos;
     }
 
-    public void Delete(int? slot = null, string? layer = null) {
+    public void Delete(string? slot = null, string? layer = null) {
         foreach (var info in List(slot, layer)) {
             File.Delete(info.Path);
         }
     }
 
-    public void Save(string name, Savestate savestate, int slot, string? layer = null) {
+    public void Save(string name, Savestate savestate, string slot, string? layer = null) {
         Delete(slot, layer);
         var fullName = $"{slot}-{name}";
 
