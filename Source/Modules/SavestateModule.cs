@@ -30,7 +30,7 @@ public class SavestateModule(
 
     private readonly SavestateStore savestates = new();
 
-    public bool CreateSavestate(string name, int slot, string? layer = null, SavestateFilter? filter = null) {
+    public bool CreateSavestate(string name, string slot, string? layer = null, SavestateFilter? filter = null) {
         try {
             var sw = Stopwatch.StartNew();
             // Pause() sets acceptingInput=false; restore it before snapshotting so the field captures the in-game value
@@ -50,7 +50,7 @@ public class SavestateModule(
     public static bool IsLoadingSavestate;
 
     /// Loads the (first) savestate stored in the given slot/layer. Returns whether one was found and loaded.
-    public async Task<bool> LoadSavestate(int? slot = null, string? layer = null) {
+    public async Task<bool> LoadSavestate(string? slot = null, string? layer = null) {
         var bySlot = savestates.List(slot, layer).ToList();
         switch (bySlot.Count) {
             case 0: return false;
@@ -67,13 +67,18 @@ public class SavestateModule(
     }
 
     /// Whether a savestate is stored in the given slot/layer.
-    public bool HasSavestate(int? slot = null, string? layer = null) {
+    public bool HasSavestate(string? slot = null, string? layer = null) {
         return savestates.List(slot, layer).Any();
     }
 
     /// Deletes the savestate(s) in the given slot/layer.
-    public void DeleteSavestate(int? slot = null, string? layer = null) {
+    public void DeleteSavestate(string? slot = null, string? layer = null) {
         savestates.Delete(slot, layer);
+    }
+
+    /// All distinct slots stored in the given layer.
+    public string[] ListSlots(string? layer = null) {
+        return savestates.List(layer: layer).Select(info => info.Slot).Distinct().ToArray();
     }
 
     public async Task<bool> LoadSavestate(Savestate savestate) {
@@ -100,12 +105,12 @@ public class SavestateModule(
     private void UiSaveToSlot(int slot) {
         var scene = SceneManager.GetActiveScene().name;
         var defaultName = scene;
-        CreateSavestate(defaultName, slot, savestateLayer);
+        CreateSavestate(defaultName, slot.ToString(), savestateLayer);
     }
 
     private async void UiLoadFromSlot(int slot) {
         try {
-            var bySlot = savestates.List(slot, savestateLayer).ToList();
+            var bySlot = savestates.List(slot.ToString(), savestateLayer).ToList();
             switch (bySlot.Count) {
                 case 0:
                     ToastManager.Toast($"Savestate '{slot}' not found");
@@ -220,7 +225,7 @@ public class SavestateModule(
                             UiLoadFromSlot(saveIndex);
                             UiState = SavestateUIState.Off;
                         } else if (UiState == SavestateUIState.Delete) {
-                            savestates.Delete(saveIndex, savestateLayer);
+                            savestates.Delete(saveIndex.ToString(), savestateLayer);
                             UiState = SavestateUIState.Off;
                         }
                     }
