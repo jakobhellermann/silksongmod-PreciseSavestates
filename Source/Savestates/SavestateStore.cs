@@ -51,13 +51,13 @@ internal class SavestateStore {
             });
     }
 
-    public void Delete(int slot, string? layer) {
+    public void Delete(int? slot = null, string? layer = null) {
         foreach (var info in List(slot, layer)) {
             File.Delete(info.Path);
         }
     }
 
-    public void Save(string name, Savestate savestate, int slot, string layer) {
+    public void Save(string name, Savestate savestate, int slot, string? layer = null) {
         Delete(slot, layer);
         var fullName = $"{slot}-{name}";
 

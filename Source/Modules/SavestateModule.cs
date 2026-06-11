@@ -30,7 +30,7 @@ public class SavestateModule(
 
     private readonly SavestateStore savestates = new();
 
-    public bool CreateSavestate(string name, int slot, string layer, SavestateFilter? filter = null) {
+    public bool CreateSavestate(string name, int slot, string? layer = null, SavestateFilter? filter = null) {
         try {
             var sw = Stopwatch.StartNew();
             // Pause() sets acceptingInput=false; restore it before snapshotting so the field captures the in-game value
@@ -48,6 +48,33 @@ public class SavestateModule(
     }
 
     public static bool IsLoadingSavestate;
+
+    /// Loads the (first) savestate stored in the given slot/layer. Returns whether one was found and loaded.
+    public async Task<bool> LoadSavestate(int? slot = null, string? layer = null) {
+        var bySlot = savestates.List(slot, layer).ToList();
+        switch (bySlot.Count) {
+            case 0: return false;
+            case > 1:
+                Log.Warning($"Multiple savestates found at slot {slot}, picking {bySlot[0].FullName}");
+                break;
+        }
+
+        if (!SavestateStore.TryGetValue(bySlot[0], out var savestate)) {
+            return false;
+        }
+
+        return await LoadSavestate(savestate);
+    }
+
+    /// Whether a savestate is stored in the given slot/layer.
+    public bool HasSavestate(int? slot = null, string? layer = null) {
+        return savestates.List(slot, layer).Any();
+    }
+
+    /// Deletes the savestate(s) in the given slot/layer.
+    public void DeleteSavestate(int? slot = null, string? layer = null) {
+        savestates.Delete(slot, layer);
+    }
 
     public async Task<bool> LoadSavestate(Savestate savestate) {
         if (IsLoadingSavestate) {
