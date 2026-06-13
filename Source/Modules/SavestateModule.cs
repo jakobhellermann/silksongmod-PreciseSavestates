@@ -33,8 +33,6 @@ public class SavestateModule(
     public bool CreateSavestate(string name, string slot, string? layer = null, SavestateFilter? filter = null) {
         try {
             var sw = Stopwatch.StartNew();
-            // Pause() sets acceptingInput=false; restore it before snapshotting so the field captures the in-game value
-            HeroController.instance.AcceptInput();
             var savestate = SavestateLogic.Create(filter ?? currentFilter);
             savestates.Save(name, savestate, slot, layer);
             Log.Info($"Created savestate {name} in {sw.ElapsedMilliseconds}ms");
@@ -103,6 +101,11 @@ public class SavestateModule(
     #region UI
 
     private void UiSaveToSlot(int slot) {
+        // The savestate UI pauses the game (Pause() sets acceptingInput=false), so restore it before snapshotting
+        // so the captured field reflects the in-game value. Only needed for the UI path — CreateSavestate itself
+        // must not mutate game state (it's also called mid-TAS, where AcceptInput would perturb playback).
+        HeroController.instance.AcceptInput();
+
         var scene = SceneManager.GetActiveScene().name;
         var defaultName = scene;
         CreateSavestate(defaultName, slot.ToString(), savestateLayer);
