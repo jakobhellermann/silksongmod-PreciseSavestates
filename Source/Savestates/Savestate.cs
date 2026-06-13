@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -22,6 +23,8 @@ public class Savestate {
     public List<ComponentSnapshot>? ComponentSnapshots;
 
     public List<PlayMakerFsmSnapshot>? FsmSnapshots;
+
+    public List<RandomAudioTableSnapshot>? AudioTableSnapshots;
 
     // public List<GameObjectSnapshot>? GameObjectSnapshots;
     // public List<GeneralFsmSnapshot>? GeneralFsmSnapshots;
@@ -261,6 +264,50 @@ public class FsmActionSnapshot {
     public required int StateIndex;
     public required int ActionIndex;
     public required JToken Data;
+}
+
+// RandomAudioClipTable is a shared ScriptableObject asset, so its runtime selection state is session-global and
+// survives a scene load — and the recursive component snapshot ignores ScriptableObjects. We capture the three
+// runtime fields explicitly because the table draws from the global UnityEngine.Random, so leftover state from
+// before the load makes a TAS non-deterministic (different clip/weight → divergent Random.Range). Keyed by asset
+// name and matched back against the same HeroController tables on load.
+public class RandomAudioTableSnapshot {
+    public required string Name;
+    public float[]? CurrentProbabilities;     // the "fair selection" weight accumulator
+    public string? PreviousClip;              // previousClip by name, resolved against the table's clips on load
+    public double NextPlayTime;               // cooldown gate
+
+    public static RandomAudioTableSnapshot Of(RandomAudioClipTable table) {
+        var previousClip = table.GetFieldValue<AudioClip>("previousClip");
+        return new RandomAudioTableSnapshot {
+            Name = table.name,
+            CurrentProbabilities = table.GetFieldValue<float[]>("currentProbabilities"),
+            PreviousClip = previousClip ? previousClip!.name : null,
+            NextPlayTime = table.GetFieldValue<double>("nextPlayTime"),
+        };
+    }
+
+    public void Restore(RandomAudioClipTable table) {
+        table.SetFieldValue("currentProbabilities", CurrentProbabilities);
+        table.SetFieldValue("nextPlayTime", NextPlayTime);
+        table.SetFieldValue("previousClip", PreviousClip != null ? FindClip(table, PreviousClip) : null);
+    }
+
+    // AudioClip has no stable global id at runtime (GUID is editor/Addressables-only, InstanceID isn't stable).
+    // But previousClip is always one of the table's own clips, so resolve it by name within clips[].
+    private static AudioClip? FindClip(RandomAudioClipTable table, string clipName) {
+        if (table.GetFieldValue<IEnumerable>("clips") is not { } clips) {
+            return null;
+        }
+
+        foreach (var c in clips) {
+            if (c.GetFieldValue<AudioClip>("Clip") is { } clip && clip && clip.name == clipName) {
+                return clip;
+            }
+        }
+
+        return null;
+    }
 }
 
 /*
