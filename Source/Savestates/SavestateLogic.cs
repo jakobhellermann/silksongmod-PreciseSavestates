@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using DevUtils.Toasts;
 using GlobalEnums;
@@ -52,6 +54,7 @@ public static class SavestateLogic {
         var seen = new HashSet<Component>();
         var sceneBehaviours = new List<ComponentSnapshot>();
         var fsmSnapshots = new List<PlayMakerFsmSnapshot>();
+        var audioTableSnapshots = new List<RandomAudioTableSnapshot>();
 
         if (filter.HasFlag(SavestateFilter.Player)) {
             sceneBehaviours.Add(ComponentSnapshot.Of(player.transform));
@@ -63,6 +66,12 @@ public static class SavestateLogic {
             foreach (var fsm in player.GetComponents<PlayMakerFSM>()) {
                 fsmSnapshots.Add(PlayMakerFsmSnapshot.Of(fsm));
             }
+
+            // Hornet's audio tables (attack/wound/...) are shared ScriptableObjects whose runtime selection state
+            // survives scene loads and isn't captured by the recursive snapshot — and they draw from the global
+            // RNG, so leftover state desyncs a TAS. See RandomAudioTableSnapshot. (footStepTables, an array, is
+            // skipped for now.)
+            audioTableSnapshots.AddRange(HeroAudioTables(player).Select(RandomAudioTableSnapshot.Of));
             // SnapshotSerializer.SnapshotRecursive(CameraManager.Instance.camera2D, sceneBehaviours, seen, 0);
         }
 
@@ -70,10 +79,25 @@ public static class SavestateLogic {
             Scene = gm.sceneName,
             ComponentSnapshots = sceneBehaviours,
             FsmSnapshots = fsmSnapshots,
+            AudioTableSnapshots = audioTableSnapshots,
             RandomState = Random.state,
         };
 
         return savestate;
+    }
+
+    /// The distinct RandomAudioClipTable ScriptableObjects referenced by single-valued HeroController fields
+    /// (attackAudioTable / wound* / ...). Reflection-enumerated so it auto-covers all such fields. The
+    /// footStepTables[] array is intentionally skipped for now.
+    private static IEnumerable<RandomAudioClipTable> HeroAudioTables(HeroController player) {
+        var seen = new HashSet<RandomAudioClipTable>();
+        foreach (var field in typeof(HeroController).GetFields(
+                     BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)) {
+            if (field.FieldType == typeof(RandomAudioClipTable)
+                && field.GetValue(player) is RandomAudioClipTable table && table && seen.Add(table)) {
+                yield return table;
+            }
+        }
     }
 
     /*
@@ -222,6 +246,19 @@ public static class SavestateLogic {
             }
 
             Log.Info($"- Applied FSM snapshots in {sw.ElapsedMilliseconds}ms");
+        }
+
+        if (savestate.AudioTableSnapshots is { Count: > 0 } audioTableSnapshots) {
+            // RandomAudioClipTable assets are shared, so re-resolve them from HeroController and match by name.
+            var tables = HeroAudioTables(HeroController.instance).ToList();
+            foreach (var snap in audioTableSnapshots) {
+                var table = tables.FirstOrDefault(t => t.name == snap.Name);
+                if (table) {
+                    snap.Restore(table);
+                } else {
+                    Log.Warning($"Savestate audio table '{snap.Name}' not found on HeroController at load time");
+                }
+            }
         }
     }
 
