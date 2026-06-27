@@ -23,6 +23,9 @@ public class Interop(SavestateModule module) {
         return module.LoadSavestate(slot, layer);
     }
 
+    public float? LastLoadedGameTime => SavestateModule.LastLoadedGameTime;
+    public int? LastLoadedFrameCount => SavestateModule.LastLoadedFrameCount;
+
     /// Deletes the savestate(s) in the given slot/layer.
     public void DeleteSavestate(string? slot = null, string? layer = null) {
         module.DeleteSavestate(slot, layer);

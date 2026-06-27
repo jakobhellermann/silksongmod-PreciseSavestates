@@ -81,6 +81,8 @@ public static class SavestateLogic {
             FsmSnapshots = fsmSnapshots,
             AudioTableSnapshots = audioTableSnapshots,
             RandomState = Random.state,
+            GameTime = Time.time,
+            GameFrameCount = Time.frameCount,
         };
 
         return savestate;

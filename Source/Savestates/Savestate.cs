@@ -31,6 +31,10 @@ public class Savestate {
     // public JObject? Flags;
     public Random.State? RandomState;
 
+    // Clock at create time (the snapshot holds absolute-time/-frame values).
+    public float? GameTime;
+    public int? GameFrameCount;
+
     public void SerializeTo(StreamWriter writer) {
         JsonSerializer.Create(jsonSettings).Serialize(writer, this);
     }
