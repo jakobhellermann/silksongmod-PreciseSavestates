@@ -47,6 +47,9 @@ public class SavestateModule(
 
     public static bool IsLoadingSavestate;
 
+    public static float? LastLoadedGameTime;
+    public static int? LastLoadedFrameCount;
+
     /// Loads the (first) savestate stored in the given slot/layer. Returns whether one was found and loaded.
     public async Task<bool> LoadSavestate(string? slot = null, string? layer = null) {
         var bySlot = savestates.List(slot, layer).ToList();
@@ -89,6 +92,8 @@ public class SavestateModule(
             IsLoadingSavestate = true;
 
             await SavestateLogic.Load(savestate, loadMode);
+            LastLoadedGameTime = savestate.GameTime;
+            LastLoadedFrameCount = savestate.GameFrameCount;
             return true;
         } catch (Exception e) {
             ToastManager.Toast($"Failed to load savestate: {e}");
