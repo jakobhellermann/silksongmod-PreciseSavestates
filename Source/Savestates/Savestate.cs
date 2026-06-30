@@ -35,6 +35,12 @@ public class Savestate {
     public float? GameTime;
     public int? GameFrameCount;
 
+    // CustomPlayerLoop.FixedUpdateCycle at create time. A session-global monotonic counter used purely as a
+    // cache-invalidation token by FixedUpdateCache.ShouldUpdate(). The recursive snapshot serializes those caches'
+    // lastUpdate fields, so restoring the counter to its captured value keeps the restored caches consistent and
+    // makes savestates byte-reproducible — otherwise the serialized lastUpdate values drift with session age.
+    public int? FixedUpdateCycle;
+
     public void SerializeTo(StreamWriter writer) {
         JsonSerializer.Create(jsonSettings).Serialize(writer, this);
     }
