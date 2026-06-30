@@ -83,6 +83,7 @@ public static class SavestateLogic {
             RandomState = Random.state,
             GameTime = Time.time,
             GameFrameCount = Time.frameCount,
+            FixedUpdateCycle = CustomPlayerLoop.FixedUpdateCycle,
         };
 
         return savestate;
@@ -264,6 +265,13 @@ public static class SavestateLogic {
                     Log.Warning($"Savestate audio table '{snap.Name}' not found on HeroController at load time");
                 }
             }
+        }
+
+        // Restore the LateFixedUpdate cycle counter (private setter → reflection) so the restored FixedUpdateCache
+        // instances are consistent with it. Without this the global counter keeps its current (session-age-dependent)
+        // value, leaving every captured cache's lastUpdate stale and making the next savestate non-reproducible.
+        if (savestate.FixedUpdateCycle is { } fixedUpdateCycle) {
+            typeof(CustomPlayerLoop).SetPropertyValue("FixedUpdateCycle", fixedUpdateCycle);
         }
     }
 
