@@ -24,6 +24,11 @@ public class CustomizableContractResolver : DefaultContractResolver {
     public Dictionary<Type, string[]> FieldAllowlist = new();
     public Dictionary<Type, string[]> FieldDenylist = new();
 
+    // custom converter per (exact) field type — lets callers hook arbitrary capture/restore logic for types that
+    // can't be round-tripped by raw field copy (e.g. tk2dSpriteAnimator: write clip name + time, restore via PlayFrom).
+    // Takes precedence over the built-in Component->RefConverter handling.
+    public Dictionary<Type, JsonConverter> PropertyConverters = new();
+
     // checks exact
     public Type[] ContainerTypesToIgnore = [];
 
@@ -171,7 +176,9 @@ public class CustomizableContractResolver : DefaultContractResolver {
             }
         }
 
-        if (RefType(itemType)) {
+        if (PropertyConverters.TryGetValue(itemType, out var customConverter)) {
+            property.Converter = customConverter;
+        } else if (RefType(itemType)) {
             property.Converter = new RefConverter(0);
         }
 

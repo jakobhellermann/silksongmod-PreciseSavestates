@@ -61,6 +61,10 @@ public static class SavestateLogic {
             sceneBehaviours.Add(ComponentSnapshot.Of(player.GetFieldValue<Rigidbody2D>("rb2d")!));
             SnapshotSerializer.SnapshotRecursive(player, sceneBehaviours, seen, 0);
 
+            // tk2d animation state (current clip + frame) — only the animator field is captured (allowlist), via
+            // Tk2dAnimatorConverter, so the hero resumes mid-animation instead of snapping to a default pose.
+            sceneBehaviours.Add(ComponentSnapshot.Of(player.AnimCtrl));
+
             // PlayMaker FSM runtime state (sprint, tools, etc.) lives in separate PlayMakerFSM components, not in
             // HeroController fields — capture it so e.g. a savestate taken mid-sprint restores correctly.
             foreach (var fsm in player.GetComponents<PlayMakerFSM>()) {

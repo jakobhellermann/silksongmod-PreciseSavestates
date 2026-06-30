@@ -163,12 +163,23 @@ public static class SnapshotSerializer {
             { typeof(Transform), ["localPosition", "localRotation", "localScale"] },
             { typeof(Rigidbody2D), ["position", "linearVelocity", "gravityScale"] },
         },
+        PropertyConverters = new Dictionary<Type, JsonConverter> {
+            { typeof(tk2dSpriteAnimator), new Tk2dAnimatorConverter() },
+        },
         FieldDenylist = new Dictionary<Type, string[]> {
             // FsmStateAction base boilerplate: definition/wiring that never changes at runtime, repeated on every
             // action. Keep only the runtime flags (active, finished); subclass runtime fields (timer etc.) are kept.
             {
                 typeof(FsmStateAction),
                 ["name", "enabled", "isOpen", "autoName", "blocksFinish", "fsmComponent", "Enabled", "Name"]
+            },
+            // Capture the full HeroAnimationController (animation-decision flags/timers drive the next clip); deny only
+            // the fields that would otherwise serialize inline: pd/cState (plain classes captured elsewhere) and the
+            // AudioEvent structs (they hold an AudioClip). The animator uses Tk2dAnimatorConverter; Component refs get
+            // a RefConverter.
+            {
+                typeof(HeroAnimationController),
+                ["pd", "cState", "wakeUpGround1", "wakeUpGround2", "wakeUpGroundCloakless", "backflipSpin"]
             },
         },
     };
