@@ -7,10 +7,12 @@ using System.Threading.Tasks;
 using DevUtils.Toasts;
 using GlobalEnums;
 using HarmonyLib;
+using Newtonsoft.Json.Linq;
 using PreciseSavestates.Savestates.Snapshot;
 using PreciseSavestates.Source;
 using PreciseSavestates.Utils;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using Component = UnityEngine.Component;
 using Random = UnityEngine.Random;
 
@@ -20,7 +22,8 @@ namespace PreciseSavestates.Savestates;
 public enum SavestateFilter {
     None = 0,
     Player = 1 << 1,
-    All = Player,
+    Scene = 1 << 2,
+    All = Player | Scene,
 }
 
 [Flags]
@@ -79,6 +82,22 @@ public static class SavestateLogic {
             // SnapshotSerializer.SnapshotRecursive(CameraManager.Instance.camera2D, sceneBehaviours, seen, 0);
         }
 
+        JToken? playerData = null;
+        if (filter.HasFlag(SavestateFilter.Player)) {
+            // The player save-data singleton. Excluded from the recursive HeroController snapshot (see
+            // SnapshotSerializer FieldDenylist) and captured here so it can be restored before scene-object init.
+            playerData = JToken.Parse(JsonUtility.ToJson(global::PlayerData.instance));
+        }
+
+        JToken? sceneData = null;
+        if (filter.HasFlag(SavestateFilter.Scene)) {
+            // Flush live persistent objects (levers, dead enemies, …) into SceneData first, then capture the whole
+            // singleton via Unity serialization. JsonUtility handles its ISerializationCallbackReceiver collections;
+            // the recursive component snapshot can't reach standalone SceneData.instance.
+            gm.SaveLevelState();
+            sceneData = JToken.Parse(JsonUtility.ToJson(global::SceneData.instance));
+        }
+
         var savestate = new Savestate {
             Scene = gm.sceneName,
             ComponentSnapshots = sceneBehaviours,
@@ -88,6 +107,8 @@ public static class SavestateLogic {
             GameTime = Time.time,
             GameFrameCount = Time.frameCount,
             FixedUpdateCycle = CustomPlayerLoop.FixedUpdateCycle,
+            PlayerData = playerData,
+            SceneData = sceneData,
         };
 
         return savestate;
@@ -223,6 +244,29 @@ public static class SavestateLogic {
             throw new Exception($"Can't load savestate in state {gm.GameState}");
         }
 
+        // Restore SceneData while the target scene is loading — after the outgoing scene's unload-write
+        // (GameManager.SaveLevelState fires early in the transition) but before the incoming scene's persistent
+        // objects read it in their Start (they've Awoken by sceneLoaded, Start runs after). Doing it here, rather
+        // than in the post-load restore loop below, is why no dummy scene is needed. Component/FSM snapshots are
+        // different: they overwrite already-live objects in place, so post-load is fine for them.
+        void OnSceneLoaded(Scene scene, LoadSceneMode mode) {
+            if (scene.name != savestate.Scene) {
+                return;
+            }
+
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+
+            if (savestate.PlayerData is { } playerData) {
+                JsonUtility.FromJsonOverwrite(playerData.ToString(), global::PlayerData.instance);
+            }
+
+            if (savestate.SceneData is { } sceneData) {
+                JsonUtility.FromJsonOverwrite(sceneData.ToString(), global::SceneData.instance);
+            }
+
+            Log.Info($"- Restored PlayerData/SceneData for scene '{scene.name}' (before persistent objects' Start)");
+        }
+
         var sw = Stopwatch.StartNew();
         if (!string.IsNullOrEmpty(savestate.Scene)) {
             // Restore PlayerData up front, before the scene's additive-load conditionals evaluate it. Those loaders
@@ -265,19 +309,23 @@ public static class SavestateLogic {
             }
 
             sceneLoadedSource = new TaskCompletionSource<bool>();
-            gm.BeginSceneTransition(new GameManager.SceneLoadInfo {
-                SceneName = savestate.Scene,
-                HeroLeaveDirection = GatePosition.unknown,
-                EntryGateName = "dreamGate",
-                EntryDelay = 0f,
-                PreventCameraFadeOut = true,
-                WaitForSceneTransitionCameraFade = false,
-                Visualization = GameManager.SceneLoadVisualizations.Default,
-            });
-            await sceneLoadedSource.Task;
+            SceneManager.sceneLoaded += OnSceneLoaded;
+            try {
+                gm.BeginSceneTransition(new GameManager.SceneLoadInfo {
+                    SceneName = savestate.Scene,
+                    HeroLeaveDirection = GatePosition.unknown,
+                    EntryGateName = "dreamGate",
+                    EntryDelay = 0f,
+                    PreventCameraFadeOut = true,
+                    WaitForSceneTransitionCameraFade = false,
+                    Visualization = GameManager.SceneLoadVisualizations.Default,
+                });
+                await sceneLoadedSource.Task;
+            } finally {
+                SceneManager.sceneLoaded -= OnSceneLoaded;
+            }
             Log.Info($"- Loaded scene in {sw.ElapsedMilliseconds}ms");
         }
-
         sw.Restart();
 
         if (savestate.ComponentSnapshots != null) {
@@ -308,6 +356,13 @@ public static class SavestateLogic {
                     Log.Warning($"Savestate audio table '{snap.Name}' not found on HeroController at load time");
                 }
             }
+        }
+
+        // Restore the global RNG state. The scene reload during the load draws from UnityEngine.Random (and would
+        // otherwise leave it reseeded/default), so without this a resumed run diverges from a continuous one even
+        // though the snapshot captured it. Must run after the scene load, which itself consumes RNG.
+        if (savestate.RandomState is { } randomState) {
+            UnityEngine.Random.state = randomState;
         }
 
         // Restore the LateFixedUpdate cycle counter (private setter → reflection) so the restored FixedUpdateCache
