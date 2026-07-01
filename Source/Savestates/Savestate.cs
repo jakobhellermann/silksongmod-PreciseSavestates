@@ -35,6 +35,20 @@ public class Savestate {
     public float? GameTime;
     public int? GameFrameCount;
 
+    // Full PlayerData (the player save-data singleton: abilities, flags like encounteredSongGolem, health, …),
+    // captured via Unity serialization. It's a standalone singleton, not reachable as a Component by the recursive
+    // snapshot, and scene FSMs read it during their Start on load — so it's captured as an explicit root and restored
+    // mid-transition (before scene-object init), same as SceneData. See SavestateLogic.LoadInner.
+    public JToken? PlayerData;
+
+    // Full SceneData (per-scene persistent bool/int state: dead enemies, broken objects, opened gates, …), captured
+    // via Unity's own serialization (JsonUtility — SceneData's PersistentItemDataCollection is an
+    // ISerializationCallbackReceiver that flattens its dictionaries into a serializable list). It's a standalone
+    // singleton not reachable from the hero object graph, so the recursive component snapshot misses it; captured as
+    // an explicit root. Restored mid-transition — before the incoming scene's persistent objects read it in Start —
+    // see SavestateLogic.LoadInner.
+    public JToken? SceneData;
+
     // CustomPlayerLoop.FixedUpdateCycle at create time. A session-global monotonic counter used purely as a
     // cache-invalidation token by FixedUpdateCache.ShouldUpdate(). The recursive snapshot serializes those caches'
     // lastUpdate fields, so restoring the counter to its captured value keeps the restored caches consistent and

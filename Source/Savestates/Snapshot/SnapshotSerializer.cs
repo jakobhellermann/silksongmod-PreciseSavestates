@@ -181,6 +181,11 @@ public static class SnapshotSerializer {
                 typeof(HeroAnimationController),
                 ["pd", "cState", "wakeUpGround1", "wakeUpGround2", "wakeUpGroundCloakless", "backflipSpin"]
             },
+            // PlayerData is a standalone save-data singleton (PlayerData.instance), captured and restored as its own
+            // root (see SavestateLogic) so it can be restored *before* the scene's persistent objects/FSMs read it in
+            // their Start (e.g. song_golem's encounteredSongGolem check). Don't also inline it here — that copy would
+            // restore post-load, too late, and double the savestate size.
+            { typeof(HeroController), ["playerData"] },
         },
     };
 
