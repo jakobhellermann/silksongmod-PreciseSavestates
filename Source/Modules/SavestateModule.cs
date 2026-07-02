@@ -82,6 +82,40 @@ public class SavestateModule(
         return savestates.List(layer: layer).Select(info => info.Slot).Distinct().ToArray();
     }
 
+    /// Create a savestate and write it directly to an absolute file path, bypassing the slot/layer store. Lets a
+    /// test corpus ship a self-contained baseline fixture instead of depending on machine-local slots.
+    public bool CreateSavestateToFile(string path, SavestateFilter? filter = null) {
+        try {
+            var savestate = SavestateLogic.Create(filter ?? currentFilter);
+            if (Path.GetDirectoryName(path) is { Length: > 0 } dir) {
+                Directory.CreateDirectory(dir);
+            }
+
+            using var writer = new StreamWriter(path);
+            savestate.SerializeTo(writer);
+            Log.Info($"Created savestate file {path}");
+            return true;
+        } catch (Exception e) {
+            ToastManager.Toast($"Failed to create savestate file: {e.Message}");
+            return false;
+        }
+    }
+
+    /// Load a savestate directly from an absolute file path, bypassing the slot/layer store.
+    public async Task<bool> LoadSavestateFromFile(string path) {
+        if (!File.Exists(path)) {
+            Log.Error($"Savestate file not found: {path}");
+            return false;
+        }
+
+        Savestate savestate;
+        using (var reader = new StreamReader(path)) {
+            savestate = Savestate.DeserializeFrom(reader);
+        }
+
+        return await LoadSavestate(savestate);
+    }
+
     public async Task<bool> LoadSavestate(Savestate savestate) {
         if (IsLoadingSavestate) {
             Log.Error("Attempted to load savestate while loading savestate");
