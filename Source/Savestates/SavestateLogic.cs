@@ -219,18 +219,21 @@ public static class SavestateLogic {
         }
 
         var sw = Stopwatch.StartNew();
-        sceneLoadedSource = new TaskCompletionSource<bool>();
-        gm.BeginSceneTransition(new GameManager.SceneLoadInfo {
-            SceneName = savestate.Scene,
-            HeroLeaveDirection = GatePosition.unknown,
-            EntryGateName = "dreamGate",
-            EntryDelay = 0f,
-            PreventCameraFadeOut = true,
-            WaitForSceneTransitionCameraFade = false,
-            Visualization = GameManager.SceneLoadVisualizations.Default,
-        });
-        await sceneLoadedSource.Task;
-        Log.Info($"- Loaded scene in {sw.ElapsedMilliseconds}ms");
+        if (!string.IsNullOrEmpty(savestate.Scene)) {
+            sceneLoadedSource = new TaskCompletionSource<bool>();
+            gm.BeginSceneTransition(new GameManager.SceneLoadInfo {
+                SceneName = savestate.Scene,
+                HeroLeaveDirection = GatePosition.unknown,
+                EntryGateName = "dreamGate",
+                EntryDelay = 0f,
+                PreventCameraFadeOut = true,
+                WaitForSceneTransitionCameraFade = false,
+                Visualization = GameManager.SceneLoadVisualizations.Default,
+            });
+            await sceneLoadedSource.Task;
+            Log.Info($"- Loaded scene in {sw.ElapsedMilliseconds}ms");
+        }
+
         sw.Restart();
 
         if (savestate.ComponentSnapshots != null) {
