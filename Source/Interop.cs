@@ -23,6 +23,17 @@ public class Interop(SavestateModule module) {
         return module.LoadSavestate(slot, layer);
     }
 
+    /// Creates a savestate and writes it directly to an absolute file path (bypassing the slot/layer store).
+    /// <paramref name="filter" /> is a <see cref="SavestateFilter" /> bitmask; pass a negative value for the default.
+    public bool CreateSavestateToFile(string path, int filter = -1) {
+        return module.CreateSavestateToFile(path, filter < 0 ? null : (SavestateFilter)filter);
+    }
+
+    /// Loads a savestate directly from an absolute file path (bypassing the slot/layer store).
+    public Task<bool> LoadSavestateFromFile(string path) {
+        return module.LoadSavestateFromFile(path);
+    }
+
     public float? LastLoadedGameTime => SavestateModule.LastLoadedGameTime;
     public int? LastLoadedFrameCount => SavestateModule.LastLoadedFrameCount;
 
