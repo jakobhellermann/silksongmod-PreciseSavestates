@@ -225,6 +225,45 @@ public static class SavestateLogic {
 
         var sw = Stopwatch.StartNew();
         if (!string.IsNullOrEmpty(savestate.Scene)) {
+            // Restore PlayerData up front, before the scene's additive-load conditionals evaluate it. Those loaders
+            // (SceneAdditiveLoadConditional) read flags like encounteredSongGolem in OnEnable/Start to pick which boss
+            // sub-scene to load, and latch the decision (loadAlt is set once and never reset) — so if they run before
+            // the OnSceneLoaded restore below, a stale value (e.g. encounteredSongGolem=true after a fight) permanently
+            // selects the wrong variant (or none) and the sub-scene never reloads. SceneData stays in OnSceneLoaded:
+            // it must land after the outgoing scene's SaveLevelState write, and nothing reads it this early.
+            if (savestate.PlayerData is { } earlyPlayerData) {
+                JsonUtility.FromJsonOverwrite(earlyPlayerData.ToString(), global::PlayerData.instance);
+            }
+
+            // Unload the current scene's additive sub-scenes before reloading it. A transition into the scene you're
+            // already in does not unload them, and SceneAdditiveLoadConditional.Start() skips reloading a sub-scene it
+            // finds already loaded — so an object destroyed in a sub-scene during play persists across the load (e.g.
+            // the song golem's resting statue, broken on wake, lives in the additive Bone_East_08_boss_golem_rest
+            // scene; without this it stays a childless shell). Unloading them lets the reloaded scene's loaders
+            // re-instantiate them fresh; PlayerData is restored before their Start (OnSceneLoaded) so they pick the
+            // right variant. Await each so the fresh loaders don't see a half-unloaded scene and skip the reload.
+            //
+            // Unload by scene reference, not via the loaders' stored Addressables handles: a sub-scene loaded through
+            // ScenePreloader carries a handle that is invalid to Addressables.UnloadSceneAsync ("invalid operation
+            // handle") and would abort the whole load. (Trade-off: SceneManager unload doesn't release the Addressables
+            // bundle ref, a small per-load leak.)
+            var activeScene = SceneManager.GetActiveScene();
+            var subScenes = new List<Scene>();
+            for (var i = 0; i < SceneManager.sceneCount; i++) {
+                var scene = SceneManager.GetSceneAt(i);
+                if (scene != activeScene && scene.isLoaded && scene.name != "DontDestroyOnLoad") {
+                    subScenes.Add(scene);
+                }
+            }
+
+            foreach (var scene in subScenes) {
+                if (SceneManager.UnloadSceneAsync(scene) is { } unloadOp) {
+                    var unloaded = new TaskCompletionSource<bool>();
+                    unloadOp.completed += _ => unloaded.SetResult(true);
+                    await unloaded.Task;
+                }
+            }
+
             sceneLoadedSource = new TaskCompletionSource<bool>();
             gm.BeginSceneTransition(new GameManager.SceneLoadInfo {
                 SceneName = savestate.Scene,
