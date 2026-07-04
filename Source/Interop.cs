@@ -37,6 +37,20 @@ public class Interop(SavestateModule module) {
     public float? LastLoadedGameTime => SavestateModule.LastLoadedGameTime;
     public int? LastLoadedFrameCount => SavestateModule.LastLoadedFrameCount;
 
+    /// When set, a load restores only the scene + pre-Start save data (PlayerData/SceneData) and holds the rest of
+    /// the snapshot as pending; the driver then applies it via <see cref="ApplyPendingSnapshot" /> at a controlled
+    /// point. Lets a TAS land the restore at a player-loop phase symmetric with the capture (no resume dead frame).
+    public bool DeferSnapshotRestore {
+        get => SavestateLogic.DeferSnapshotRestore;
+        set => SavestateLogic.DeferSnapshotRestore = value;
+    }
+
+    /// Whether a deferred load has finished its scene phase and is waiting for the component/FSM/RNG/clock restore.
+    public bool SnapshotPending => SavestateLogic.PendingSnapshot != null;
+
+    /// Applies the held snapshot (component/FSM/RNG/clock). No-op if none is pending.
+    public void ApplyPendingSnapshot() => SavestateLogic.ApplyPendingSnapshot();
+
     /// Deletes the savestate(s) in the given slot/layer.
     public void DeleteSavestate(string? slot = null, string? layer = null) {
         module.DeleteSavestate(slot, layer);

@@ -326,8 +326,36 @@ public static class SavestateLogic {
             }
             Log.Info($"- Loaded scene in {sw.ElapsedMilliseconds}ms");
         }
-        sw.Restart();
+        // The scene + pre-Start save data (PlayerData/SceneData) is now in place. The rest of the snapshot
+        // (components/FSM/audio/RNG/clock) overwrites already-live objects, so it can be applied at any point after
+        // the scene load. When DeferSnapshotRestore is set, hold it as PendingSnapshot for the driver to apply at a
+        // controlled player-loop phase (symmetric with the capture) instead of here in the async scene-load
+        // continuation — that's what makes a resumed run land byte-identical to a continuous one (no dead frame).
+        if (DeferSnapshotRestore) {
+            PendingSnapshot = savestate;
+        } else {
+            ApplySnapshot(savestate);
+        }
+    }
 
+    /// When set, LoadInner restores only the scene + pre-Start save data and holds the rest as PendingSnapshot,
+    /// leaving the driver to call ApplyPendingSnapshot at a controlled phase. Off = restore fully inline (default).
+    public static bool DeferSnapshotRestore;
+    public static Savestate? PendingSnapshot { get; private set; }
+
+    public static void ApplyPendingSnapshot() {
+        if (PendingSnapshot is not { } savestate) {
+            return;
+        }
+
+        PendingSnapshot = null;
+        ApplySnapshot(savestate);
+    }
+
+    /// Applies the parts of the snapshot that overwrite already-live objects in place (everything except the scene
+    /// and the pre-Start save data restored during the transition).
+    private static void ApplySnapshot(Savestate savestate) {
+        var sw = Stopwatch.StartNew();
         if (savestate.ComponentSnapshots != null) {
             foreach (var mb in savestate.ComponentSnapshots) {
                 mb.Restore();
