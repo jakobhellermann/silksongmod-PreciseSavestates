@@ -117,8 +117,13 @@ public class SavestateModule(
     }
 
     public async Task<bool> LoadSavestate(Savestate savestate) {
-        if (IsLoadingSavestate) {
-            Log.Error("Attempted to load savestate while loading savestate");
+        // Loading is exclusive. Reject not only while a load runs, but also while a deferred snapshot is still pending:
+        // with DeferSnapshotRestore the component/FSM/RNG restore is held until the driver applies it, and
+        // IsLoadingSavestate is already false in that window. A reentrant load there overlaps scene transitions and
+        // leaves stale entries in SceneAdditiveLoadConditional's loader list, which NREs the next transition and
+        // strands the game mid-load.
+        if (IsLoadingSavestate || SavestateLogic.PendingSnapshot != null) {
+            Log.Error("Attempted to load savestate while another load is in progress");
             return false;
         }
 
