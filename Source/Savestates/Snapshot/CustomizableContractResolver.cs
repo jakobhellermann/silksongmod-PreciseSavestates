@@ -58,10 +58,16 @@ public class CustomizableContractResolver : DefaultContractResolver {
 
             list.AddRange(ty.GetFields(FieldBindingFlags | BindingFlags.DeclaredOnly)
                 .Where(field => field.GetCustomAttribute<CompilerGeneratedAttribute>() == null));
+            // Capture properties that hold real state: a virtual getter (Unity engine-backed, e.g. Transform.position)
+            // or a compiler-generated getter (an auto-property = a field with sugar, e.g.
+            // HeroAnimationController.actorState). Setter visibility is irrelevant — a private set still backs real
+            // state; it's restored through the private setter (see CreateProperty). Computed properties (hand-written
+            // accessors that derive from other state) are neither virtual nor compiler-generated, so they're skipped.
             list.AddRange(ty
                 .GetProperties(PropertyBindingFlags | BindingFlags.DeclaredOnly)
-                .Where(prop => prop.CanWrite && prop.CanRead
-                                             && prop.GetGetMethod() is { IsVirtual: true }));
+                .Where(prop => prop.CanRead && prop.CanWrite && prop.GetMethod is { } getter
+                                             && (getter.IsVirtual
+                                                 || getter.GetCustomAttribute<CompilerGeneratedAttribute>() != null)));
             /* || prop.GetCustomAttribute<NativePropertyAttribute>() != null TODO */
             // TODO: just removed added from this type
             if (FieldDenylist.TryGetValue(ty, out var denyList)) {
@@ -128,6 +134,12 @@ public class CustomizableContractResolver : DefaultContractResolver {
         var property = base.CreateProperty(member, MemberSerialization.Fields);
 
         property.Ignored = false;
+
+        // A property we chose to capture is real state — restore it even through a private/non-public setter
+        // (Newtonsoft marks such properties read-only by default, which would silently drop them on load).
+        if (member is PropertyInfo { CanWrite: true }) {
+            property.Writable = true;
+        }
 
         var shouldSerialize = true;
 
