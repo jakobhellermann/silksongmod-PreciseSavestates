@@ -41,6 +41,8 @@ public static class SnapshotSerializer {
             return;
         }
 
+        ComponentSnapshot.NormalizeCenterOfMass(component);
+
         RefConverter.References.Clear();
         var tok = JToken.FromObject(component, JsonSerializer.Create(Settings));
 

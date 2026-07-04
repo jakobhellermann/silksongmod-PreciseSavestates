@@ -121,10 +121,27 @@ public class ComponentSnapshot {
     public required JToken Data;
 
     public static ComponentSnapshot Of(Component mb) {
+        NormalizeCenterOfMass(mb);
         return new ComponentSnapshot {
             Path = ObjectUtils.ObjectComponentPath(mb),
             Data = SnapshotSerializer.Snapshot(mb),
         };
+    }
+
+    // Box2D integrates a body's center of mass (sweep.c) internally and derives rb.position from it; we snapshot the
+    // derived position, so setting it back on restore reconstructs sweep.c a couple ULP off the continuously-
+    // integrated value — a resumed run then drifts ~1 ULP from a continuous one. Zeroing the center of mass makes
+    // sweep.c == position, so snapshotting/restoring position is exact (no offset to round through). It is behavior-
+    // neutral for a FreezeRotation body (it translates rigidly regardless of where its center of mass sits), so it
+    // never needs restoring. Applied at capture (the continuing run must sit on the same footing as a resume) and at
+    // restore (a freshly loaded body may still carry its auto center of mass).
+    public static void NormalizeCenterOfMass(Component c) {
+        if (c is Rigidbody2D { bodyType: RigidbodyType2D.Dynamic } rb &&
+            rb.constraints.HasFlag(RigidbodyConstraints2D.FreezeRotation) &&
+            rb.centerOfMass != Vector2.zero) {
+            rb.useAutoMass = false;
+            rb.centerOfMass = Vector2.zero;
+        }
     }
 
     public bool Restore() {
@@ -134,6 +151,7 @@ public class ComponentSnapshot {
             return false;
         }
 
+        NormalizeCenterOfMass(targetComponent);
         SnapshotSerializer.Populate(targetComponent, Data);
 
         return true;
