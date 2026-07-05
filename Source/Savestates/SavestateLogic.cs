@@ -320,6 +320,7 @@ public static class SavestateLogic {
             }
 
             timing.Mark("unload");
+            ScenePhaseTiming.Reset();
             sceneLoadedSource = new TaskCompletionSource<bool>();
             SceneManager.sceneLoaded += OnSceneLoaded;
             try {
@@ -337,6 +338,13 @@ public static class SavestateLogic {
                 SceneManager.sceneLoaded -= OnSceneLoaded;
             }
             timing.Mark("enterTail");
+            // Fold in the per-phase scene-load timing (Fetch/ClearMem/Activation/GarbageCollect). Measured by our own
+            // wall-clock hook on SceneLoad.Record{Begin,End}Time — the game's own GetDuration reads
+            // Time.realtimeSinceStartup, which DeterministicTimePatch freezes during a TAS load (so it reports 0).
+            foreach (var (phase, ms) in ScenePhaseTiming.Durations()) {
+                timing.Add($"scene.{phase}", ms);
+            }
+
             Log.Info($"- Loaded scene in {sw.ElapsedMilliseconds}ms");
         }
 
