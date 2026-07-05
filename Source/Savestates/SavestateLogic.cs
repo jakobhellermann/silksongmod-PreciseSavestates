@@ -228,17 +228,27 @@ public static class SavestateLogic {
 
     public static async Task Load(Savestate savestate, SavestateLoadMode loadMode) {
         var total = Stopwatch.StartNew();
+        // A scene-less savestate is an in-place normalization apply (the `load` command's idle fixture), not a
+        // user-facing scene load — keep it quiet (no toast, no timing log; see LoadInner).
+        var silent = string.IsNullOrEmpty(savestate.Scene);
         try {
             IsLoadingSavestate = true;
             await LoadInner(savestate, loadMode);
-            ToastManager.Toast($"Loaded in {total.ElapsedMilliseconds}ms");
+            if (!silent) {
+                ToastManager.Toast($"Loaded in {total.ElapsedMilliseconds}ms");
+            }
         } finally {
             IsLoadingSavestate = false;
         }
     }
 
     private static async Task LoadInner(Savestate savestate, SavestateLoadMode loadMode) {
-        Log.Info("Loading savestate...");
+        var silent = string.IsNullOrEmpty(savestate.Scene);
+        if (!silent) {
+            Log.Info($"Loading savestate... (scene='{savestate.Scene}', mode={loadMode})");
+        }
+
+        var timing = new LoadTiming();
         var gm = GameManager.instance;
         if (gm.GameState != GameState.PLAYING) {
             throw new Exception($"Can't load savestate in state {gm.GameState}");
@@ -264,6 +274,7 @@ public static class SavestateLogic {
                 JsonUtility.FromJsonOverwrite(sceneData.ToString(), global::SceneData.instance);
             }
 
+            timing.Mark("sceneAssets");
             Log.Info($"- Restored PlayerData/SceneData for scene '{scene.name}' (before persistent objects' Start)");
         }
 
@@ -308,6 +319,7 @@ public static class SavestateLogic {
                 }
             }
 
+            timing.Mark("unload");
             sceneLoadedSource = new TaskCompletionSource<bool>();
             SceneManager.sceneLoaded += OnSceneLoaded;
             try {
@@ -324,17 +336,24 @@ public static class SavestateLogic {
             } finally {
                 SceneManager.sceneLoaded -= OnSceneLoaded;
             }
+            timing.Mark("enterTail");
             Log.Info($"- Loaded scene in {sw.ElapsedMilliseconds}ms");
         }
+
         // The scene + pre-Start save data (PlayerData/SceneData) is now in place. The rest of the snapshot
         // (components/FSM/audio/RNG/clock) overwrites already-live objects, so it can be applied at any point after
         // the scene load. When DeferSnapshotRestore is set, hold it as PendingSnapshot for the driver to apply at a
         // controlled player-loop phase (symmetric with the capture) instead of here in the async scene-load
         // continuation — that's what makes a resumed run land byte-identical to a continuous one (no dead frame).
+        // The timing summary is logged after the apply: inline here, or in ApplyPendingSnapshot for the deferred path.
         if (DeferSnapshotRestore) {
             PendingSnapshot = savestate;
+            pendingTiming = timing;
         } else {
-            ApplySnapshot(savestate);
+            ApplySnapshot(savestate, timing);
+            if (!silent) {
+                timing.LogSummary();
+            }
         }
     }
 
@@ -343,19 +362,30 @@ public static class SavestateLogic {
     public static bool DeferSnapshotRestore;
     public static Savestate? PendingSnapshot { get; private set; }
 
+    /// The load's timing accumulator, held across the deferred boundary so ApplyPendingSnapshot can record the apply
+    /// phase and log the full summary once the restore actually runs.
+    private static LoadTiming? pendingTiming;
+
     public static void ApplyPendingSnapshot() {
         if (PendingSnapshot is not { } savestate) {
             return;
         }
 
         PendingSnapshot = null;
-        ApplySnapshot(savestate);
+        var timing = pendingTiming;
+        pendingTiming = null;
+        timing?.Mark("deferred");
+        ApplySnapshot(savestate, timing);
+        timing?.LogSummary();
     }
 
     /// Applies the parts of the snapshot that overwrite already-live objects in place (everything except the scene
     /// and the pre-Start save data restored during the transition).
-    private static void ApplySnapshot(Savestate savestate) {
+    private static void ApplySnapshot(Savestate savestate, LoadTiming? timing = null) {
+        var applyTotal = Stopwatch.StartNew();
         var sw = Stopwatch.StartNew();
+        // Scene-less applies are the `load` command's idle fixture — keep them quiet (see Load/LoadInner).
+        var silent = string.IsNullOrEmpty(savestate.Scene);
         // Restoring a snapshot teleports bodies, which makes Box2D fire phantom OnCollision/OnTrigger enter/exit
         // edges on the first step after the load (a hero placed on ground it wasn't touching "lands", etc.) — a
         // divergence vs a continuous run, and the edge handlers can mutate captured state (e.g. a landing setting a
@@ -378,7 +408,9 @@ public static class SavestateLogic {
                 mb.Restore();
             }
 
-            Log.Info($"- Applied snapshots to scene in {sw.ElapsedMilliseconds}ms");
+            if (!silent) {
+                Log.Info($"- Applied snapshots to scene in {sw.ElapsedMilliseconds}ms");
+            }
         }
 
 
@@ -388,7 +420,9 @@ public static class SavestateLogic {
                 fsm.Restore();
             }
 
-            Log.Info($"- Applied FSM snapshots in {sw.ElapsedMilliseconds}ms");
+            if (!silent) {
+                Log.Info($"- Applied FSM snapshots in {sw.ElapsedMilliseconds}ms");
+            }
         }
 
         if (savestate.AudioTableSnapshots is { Count: > 0 } audioTableSnapshots) {
@@ -417,6 +451,8 @@ public static class SavestateLogic {
         if (savestate.FixedUpdateCycle is { } fixedUpdateCycle) {
             typeof(CustomPlayerLoop).SetPropertyValue("FixedUpdateCycle", fixedUpdateCycle);
         }
+
+        timing?.Add("apply", applyTotal.ElapsedMilliseconds);
     }
 
     /*
