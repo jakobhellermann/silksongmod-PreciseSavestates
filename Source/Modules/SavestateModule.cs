@@ -51,6 +51,12 @@ public class SavestateModule(
     public static float? LastLoadedGameTime;
     public static int? LastLoadedFrameCount;
 
+    /// RandomState of the last-applied snapshot. The driver re-applies this at the load→playback edge to wipe
+    /// load-window RNG churn back to the value the load intended — the captured RNG for a real resume, the idle
+    /// fixture's (InitState-seed) RNG for a `load` command — instead of a blanket re-seed that would clobber a
+    /// resume's restored RNG.
+    public static UnityEngine.Random.State? LastLoadedRandomState;
+
     /// Loads the (first) savestate stored in the given slot/layer. Returns whether one was found and loaded.
     public async Task<bool> LoadSavestate(string? slot = null, string? layer = null) {
         var bySlot = savestates.List(slot, layer).ToList();
@@ -134,6 +140,7 @@ public class SavestateModule(
             await SavestateLogic.Load(savestate, loadMode);
             LastLoadedGameTime = savestate.GameTime;
             LastLoadedFrameCount = savestate.GameFrameCount;
+            LastLoadedRandomState = savestate.RandomState;
             return true;
         } catch (Exception e) {
             ToastManager.Toast($"Failed to load savestate: {e}");

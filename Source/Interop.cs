@@ -36,6 +36,7 @@ public class Interop(SavestateModule module) {
 
     public float? LastLoadedGameTime => SavestateModule.LastLoadedGameTime;
     public int? LastLoadedFrameCount => SavestateModule.LastLoadedFrameCount;
+    public UnityEngine.Random.State? LastLoadedRandomState => SavestateModule.LastLoadedRandomState;
 
     /// When set, a load restores only the scene + pre-Start save data (PlayerData/SceneData) and holds the rest of
     /// the snapshot as pending; the driver then applies it via <see cref="ApplyPendingSnapshot" /> at a controlled
