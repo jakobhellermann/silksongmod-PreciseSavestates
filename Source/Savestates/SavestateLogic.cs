@@ -321,6 +321,12 @@ public static class SavestateLogic {
 
             timing.Mark("unload");
             ScenePhaseTiming.Reset();
+            // Skip the scene load's synchronous full GC (GCManager.Collect, the single biggest phase — ~40% of a
+            // reload's wall-clock). A savestate reload happens often and doesn't need a full collection each time;
+            // the game's own DisabledManualCollect switch turns GCManager.Collect into a no-op. Restored after the
+            // transition so normal (non-savestate) scene loads still collect.
+            var wasManualCollectDisabled = GCManager.DisabledManualCollect;
+            GCManager.DisabledManualCollect = true;
             sceneLoadedSource = new TaskCompletionSource<bool>();
             SceneManager.sceneLoaded += OnSceneLoaded;
             try {
@@ -336,6 +342,7 @@ public static class SavestateLogic {
                 await sceneLoadedSource.Task;
             } finally {
                 SceneManager.sceneLoaded -= OnSceneLoaded;
+                GCManager.DisabledManualCollect = wasManualCollectDisabled;
             }
             timing.Mark("enterTail");
             // Fold in the per-phase scene-load timing (Fetch/ClearMem/Activation/GarbageCollect). Measured by our own
