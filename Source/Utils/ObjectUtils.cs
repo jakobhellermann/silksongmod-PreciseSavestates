@@ -39,6 +39,17 @@ public static class ObjectUtils {
         return $"{objectPath}@{type.Name}";
     }
 
+    /// The component type name encoded in a component path ("…@TypeName" / "…@TypeName:index"), or null if the path
+    /// has no "@" component spec. Cheap string parse — no scene lookup, unlike <see cref="LookupObjectComponentPath"/>.
+    public static string? ComponentTypeName(string path) {
+        if (path.SplitOnce('@') is not (_, { } componentSpec)) {
+            return null;
+        }
+
+        int colon = componentSpec.IndexOf(':');
+        return colon >= 0 ? componentSpec[..colon] : componentSpec;
+    }
+
     public static GameObject? LookupPath(string path) {
         var dontDestroyScene = GameManager.instance.gameObject.scene;
         if (LookupPath(dontDestroyScene, path) is { } objD) {

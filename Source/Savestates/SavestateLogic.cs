@@ -356,6 +356,23 @@ public static class SavestateLogic {
     /// and the pre-Start save data restored during the transition).
     private static void ApplySnapshot(Savestate savestate) {
         var sw = Stopwatch.StartNew();
+        // Restoring a snapshot teleports bodies, which makes Box2D fire phantom OnCollision/OnTrigger enter/exit
+        // edges on the first step after the load (a hero placed on ground it wasn't touching "lands", etc.) — a
+        // divergence vs a continuous run, and the edge handlers can mutate captured state (e.g. a landing setting a
+        // SceneData persistentBool). To neutralize both: (1) restore just the position-bearing snapshots so every
+        // body sits at its captured position, (2) step physics by 0 so Box2D builds the contact pairs and fires
+        // those edges *here*, inside the untraced load window, then (3) restore everything else so whatever the edge
+        // handlers touched is overwritten by the snapshot. Net: no phantom edges in playback, byte-identical state.
+        if (savestate.ComponentSnapshots != null) {
+            foreach (var mb in savestate.ComponentSnapshots) {
+                if (ObjectUtils.ComponentTypeName(mb.Path) is "Transform" or "Rigidbody2D") {
+                    mb.Restore();
+                }
+            }
+        }
+
+        UnityEngine.Physics2D.Simulate(0f);
+
         if (savestate.ComponentSnapshots != null) {
             foreach (var mb in savestate.ComponentSnapshots) {
                 mb.Restore();
@@ -363,6 +380,7 @@ public static class SavestateLogic {
 
             Log.Info($"- Applied snapshots to scene in {sw.ElapsedMilliseconds}ms");
         }
+
 
         if (savestate.FsmSnapshots != null) {
             sw.Restart();
