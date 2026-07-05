@@ -56,12 +56,18 @@ public static class SavestateLogic {
 
         var seen = new HashSet<Component>();
         var sceneBehaviours = new List<ComponentSnapshot>();
+        var gameObjectSnapshots = new List<GameObjectSnapshot>();
         var fsmSnapshots = new List<PlayMakerFsmSnapshot>();
         var audioTableSnapshots = new List<RandomAudioTableSnapshot>();
 
         if (filter.HasFlag(SavestateFilter.Player)) {
             sceneBehaviours.Add(ComponentSnapshot.Of(player.transform));
             sceneBehaviours.Add(ComponentSnapshot.Of(player.GetFieldValue<Rigidbody2D>("rb2d")!));
+            // Hero MeshRenderer — captures its enabled flag (see the Renderer allowlist); the recursive snapshot below
+            // doesn't reach it.
+            sceneBehaviours.Add(ComponentSnapshot.Of(player.GetComponent<MeshRenderer>()));
+            // GameObject-level state (physics layer) — a hazard death moves the hero off its normal layer.
+            gameObjectSnapshots.Add(GameObjectSnapshot.Of(player.gameObject));
             SnapshotSerializer.SnapshotRecursive(player, sceneBehaviours, seen, 0);
 
             // tk2d animation state (current clip + frame) — only the animator field is captured (allowlist), via
@@ -101,6 +107,7 @@ public static class SavestateLogic {
         var savestate = new Savestate {
             Scene = gm.sceneName,
             ComponentSnapshots = sceneBehaviours,
+            GameObjectSnapshots = gameObjectSnapshots,
             FsmSnapshots = fsmSnapshots,
             AudioTableSnapshots = audioTableSnapshots,
             RandomState = Random.state,
@@ -253,6 +260,11 @@ public static class SavestateLogic {
         if (gm.GameState != GameState.PLAYING) {
             throw new Exception($"Can't load savestate in state {gm.GameState}");
         }
+
+        // Cancel any in-flight death/respawn/invuln coroutines and reset the effects they drive — state a snapshot
+        // can't restore. Runs for every load (including the `load` command's idle-fixture normalization); a no-op when
+        // no death is in flight.
+        LoadCoroutineCleanup.Run();
 
         // Restore SceneData while the target scene is loading — after the outgoing scene's unload-write
         // (GameManager.SaveLevelState fires early in the transition) but before the incoming scene's persistent
@@ -425,6 +437,12 @@ public static class SavestateLogic {
 
             if (!silent) {
                 Log.Info($"- Applied snapshots to scene in {sw.ElapsedMilliseconds}ms");
+            }
+        }
+
+        if (savestate.GameObjectSnapshots != null) {
+            foreach (var go in savestate.GameObjectSnapshots) {
+                go.Restore();
             }
         }
 

@@ -161,7 +161,15 @@ public static class SnapshotSerializer {
         ExactFieldTypesToIgnore = [typeof(Component)],
         FieldAllowlist = new Dictionary<Type, string[]> {
             { typeof(Transform), ["localPosition", "localRotation", "localScale"] },
-            { typeof(Rigidbody2D), ["position", "linearVelocity", "gravityScale"] },
+            // bodyType is gameplay state, not a static config flag (a Kinematic body has no gravity/collision), so a
+            // load must restore the live value.
+            { typeof(Rigidbody2D), ["position", "linearVelocity", "gravityScale", "bodyType"] },
+            // The MeshRenderer's enabled flag is visible gameplay state, but it's declared on the Renderer/Object base
+            // types the resolver ignores, so it needs an explicit allowlist. Capture only `enabled`: it's declared on
+            // Renderer (hence the Renderer entry); the empty MeshRenderer entry suppresses that level's engine-backed
+            // props (materials/lightmap/…), which we neither want nor can round-trip cleanly.
+            { typeof(MeshRenderer), [] },
+            { typeof(Renderer), ["enabled"] },
         },
         PropertyConverters = new Dictionary<Type, JsonConverter> {
             { typeof(tk2dSpriteAnimator), new Tk2dAnimatorConverter() },

@@ -26,7 +26,7 @@ public class Savestate {
 
     public List<RandomAudioTableSnapshot>? AudioTableSnapshots;
 
-    // public List<GameObjectSnapshot>? GameObjectSnapshots;
+    public List<GameObjectSnapshot>? GameObjectSnapshots;
     // public List<GeneralFsmSnapshot>? GeneralFsmSnapshots;
     // public JObject? Flags;
     public Random.State? RandomState;
@@ -168,6 +168,29 @@ public class ComponentSnapshot {
         NormalizeCenterOfMass(targetComponent);
         SnapshotSerializer.Populate(targetComponent, Data);
 
+        return true;
+    }
+}
+
+// GameObject-level state not reachable as a serialized component field — currently the physics layer, which is
+// gameplay state (it decides what the object collides with) a load must restore. Room to grow (active/…) later.
+public class GameObjectSnapshot {
+    public required string Path;
+    public int Layer;
+
+    public static GameObjectSnapshot Of(GameObject go) => new() {
+        Path = ObjectUtils.ObjectPath(go),
+        Layer = go.layer,
+    };
+
+    public bool Restore() {
+        var go = ObjectUtils.LookupPath(Path);
+        if (!go) {
+            Log.Error($"Savestate stored GameObject state on {Path}, which does not exist at load time");
+            return false;
+        }
+
+        go!.layer = Layer;
         return true;
     }
 }
