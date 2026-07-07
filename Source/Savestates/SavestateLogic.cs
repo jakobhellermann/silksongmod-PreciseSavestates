@@ -352,10 +352,21 @@ public static class SavestateLogic {
                     Visualization = GameManager.SceneLoadVisualizations.Default,
                 });
                 await sceneLoadedSource.Task;
+
+                // The reloaded scene's boss SceneAdditiveLoadConditional registers only *after* the load and then
+                // decides its load path by LoadInSequence: it's set true at every scene-load start and flipped false
+                // by the LoadBoss phase's LoadAll(). But that LoadAll only runs if a loader was already registered at
+                // the LoadBoss check — the fresh loader isn't yet, so whether LIS ends up false depends on racy stale
+                // loaders from the previous scene (the "boss loads by parity" bug). A loader whose Start sees LIS=false
+                // self-loads its sub-scene; LIS=true leaves it deferred forever. Force LIS=false so the post-load
+                // loader always self-loads deterministically (its own TryTestLoad still gates whether it loads at all,
+                // so a no-boss savestate stays boss-less).
+                SceneAdditiveLoadConditional.LoadInSequence = false;
             } finally {
                 SceneManager.sceneLoaded -= OnSceneLoaded;
                 GCManager.DisabledManualCollect = wasManualCollectDisabled;
             }
+
             timing.Mark("enterTail");
             // Fold in the per-phase scene-load timing (Fetch/ClearMem/Activation/GarbageCollect). Measured by our own
             // wall-clock hook on SceneLoad.Record{Begin,End}Time — the game's own GetDuration reads
