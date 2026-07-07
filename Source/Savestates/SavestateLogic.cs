@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -12,6 +13,7 @@ using PreciseSavestates.Savestates.Snapshot;
 using PreciseSavestates.Source;
 using PreciseSavestates.Utils;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
 using UnityEngine.SceneManagement;
 using Component = UnityEngine.Component;
 using Random = UnityEngine.Random;
@@ -106,6 +108,7 @@ public static class SavestateLogic {
 
         var savestate = new Savestate {
             Scene = gm.sceneName,
+            AdditiveScenes = CurrentAdditiveScenes(),
             ComponentSnapshots = sceneBehaviours,
             GameObjectSnapshots = gameObjectSnapshots,
             FsmSnapshots = fsmSnapshots,
@@ -362,6 +365,8 @@ public static class SavestateLogic {
                 // loader always self-loads deterministically (its own TryTestLoad still gates whether it loads at all,
                 // so a no-boss savestate stays boss-less).
                 SceneAdditiveLoadConditional.LoadInSequence = false;
+
+                await PreloadAdditiveScenes(savestate.AdditiveScenes);
             } finally {
                 SceneManager.sceneLoaded -= OnSceneLoaded;
                 GCManager.DisabledManualCollect = wasManualCollectDisabled;
@@ -392,6 +397,41 @@ public static class SavestateLogic {
             if (!silent) {
                 timing.LogSummary();
             }
+        }
+    }
+
+    // Additive scenes loaded alongside the active scene — everything except the active scene and DontDestroyOnLoad.
+    // These are the boss-arena sub-scenes; captured so a load can reproduce exactly them.
+    private static List<string> CurrentAdditiveScenes() {
+        var active = SceneManager.GetActiveScene();
+        var scenes = new List<string>();
+        for (var i = 0; i < SceneManager.sceneCount; i++) {
+            var scene = SceneManager.GetSceneAt(i);
+            if (scene != active && scene.isLoaded && scene.name != "DontDestroyOnLoad") {
+                scenes.Add(scene.name);
+            }
+        }
+
+        return scenes;
+    }
+
+    // The boss arena is an additive sub-scene loaded by a SceneAdditiveLoadConditional whose Start (and thus its async
+    // LoadRoutine) runs only once script updates resume — i.e. during playback, after this load window closes — so the
+    // load completes on a real-time-variable frame mid-playback and desyncs the trace. Preload the captured scenes here
+    // via the same Addressables key the loader uses ("Scenes/" + name). When the loader's Start later runs it finds the
+    // scene already loaded and takes its already-loaded shortcut (skipping the racy async load). Loaded independently of
+    // any loader coroutine, so there's no double-load conflict on the same scene.
+    private static async Task PreloadAdditiveScenes(List<string>? wanted) {
+        if (wanted is not { Count: > 0 }) {
+            return;
+        }
+
+        foreach (var name in wanted) {
+            if (SceneManager.GetSceneByName(name).isLoaded) {
+                continue;
+            }
+
+            await Addressables.LoadSceneAsync("Scenes/" + name, LoadSceneMode.Additive).Task;
         }
     }
 

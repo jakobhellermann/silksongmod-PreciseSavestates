@@ -20,6 +20,11 @@ namespace PreciseSavestates.Savestates;
 public class Savestate {
     public string? Scene;
 
+    // Additive scenes loaded alongside the main Scene at capture time (boss arenas etc.). On load, playback is held
+    // until exactly these are loaded again, so the async boss-arena load can't bleed into playback on a variable frame
+    // (see SavestateLogic.AwaitAdditiveScenesLoaded).
+    public List<string>? AdditiveScenes;
+
     public List<ComponentSnapshot>? ComponentSnapshots;
 
     public List<PlayMakerFsmSnapshot>? FsmSnapshots;
