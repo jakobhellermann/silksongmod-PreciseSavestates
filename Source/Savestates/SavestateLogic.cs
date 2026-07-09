@@ -418,9 +418,13 @@ public static class SavestateLogic {
     // The boss arena is an additive sub-scene loaded by a SceneAdditiveLoadConditional whose Start (and thus its async
     // LoadRoutine) runs only once script updates resume — i.e. during playback, after this load window closes — so the
     // load completes on a real-time-variable frame mid-playback and desyncs the trace. Preload the captured scenes here
-    // via the same Addressables key the loader uses ("Scenes/" + name). When the loader's Start later runs it finds the
-    // scene already loaded and takes its already-loaded shortcut (skipping the racy async load). Loaded independently of
-    // any loader coroutine, so there's no double-load conflict on the same scene.
+    // via the same Addressables key the loader uses ("Scenes/" + name), which loads *and activates* them. When the
+    // loader's Start later runs it finds the scene already loaded and takes its already-loaded shortcut (skipping the
+    // racy async load). Loaded independently of any loader coroutine, so there's no double-load conflict.
+    //
+    // The shortcut sets sceneLoaded=true but never sets the loader's `loadOp` handle, so its Unload() couldn't release
+    // the sub-scene on a later transition (→ orphaned, the HK "room dupe"). Stash our Addressables handle so
+    // AdditiveScenePreload can inject it into the loader's loadOp when it takes the shortcut.
     private static async Task PreloadAdditiveScenes(List<string>? wanted) {
         if (wanted is not { Count: > 0 }) {
             return;
@@ -431,7 +435,9 @@ public static class SavestateLogic {
                 continue;
             }
 
-            await Addressables.LoadSceneAsync("Scenes/" + name, LoadSceneMode.Additive).Task;
+            var handle = Addressables.LoadSceneAsync("Scenes/" + name, LoadSceneMode.Additive);
+            await handle.Task;
+            AdditiveScenePreload.PendingUnloadHandles[name] = handle;
         }
     }
 
