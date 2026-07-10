@@ -87,7 +87,29 @@ public static class SavestateLogic {
             // RNG, so leftover state desyncs a TAS. See RandomAudioTableSnapshot. (footStepTables, an array, is
             // skipped for now.)
             audioTableSnapshots.AddRange(HeroAudioTables(player).Select(RandomAudioTableSnapshot.Of));
-            // SnapshotSerializer.SnapshotRecursive(CameraManager.Instance.camera2D, sceneBehaviours, seen, 0);
+
+            // Camera: CameraController drives the main camera toward the hero via Vector3.SmoothDamp every frame. A
+            // load that doesn't restore it starts the camera at the scene-entry default and *pans* in (with a fade) —
+            // a visible, and (since it is traced) determinism-breaking, divergence from a continuous run. Capture the
+            // controller's own state (its private SmoothDamp velocity + damp/lock/look fields) and the camera
+            // transform, so playback frame 0 has the camera exactly where it was captured, at rest — no pan. Both live
+            // on persistent (DontDestroyOnLoad) objects, so their paths resolve at load time for the restore.
+            if (GameManager.instance.cameraCtrl is { } cameraCtrl) {
+                sceneBehaviours.Add(ComponentSnapshot.Of(cameraCtrl));
+                if (GameCameras.instance is { mainCamera: { } mainCamera }) {
+                    sceneBehaviours.Add(ComponentSnapshot.Of(mainCamera.transform));
+                }
+
+                // The camera doesn't aim at the hero directly — it follows a separate CameraTarget whose mode
+                // (LOCK_ZONE/FREE), lock-zone bounds, offsets, destination and position decide where the camera
+                // goes. Without capturing it, a load leaves the target stuck in the previous lock zone (e.g. a boss
+                // arena), so the restored camera sits at that zone's position instead of following the restored hero
+                // (CameraController.destination is computed relative to this target, not the hero).
+                if (cameraCtrl.camTarget is { } camTarget) {
+                    sceneBehaviours.Add(ComponentSnapshot.Of(camTarget));
+                    sceneBehaviours.Add(ComponentSnapshot.Of(camTarget.transform));
+                }
+            }
         }
 
         JToken? playerData = null;
