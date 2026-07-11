@@ -355,6 +355,26 @@ public class PlayMakerFsmSnapshot {
         fsm.SetFieldValue("activeStateName", ActiveState);
         fsm.SetFieldValue("activeStateEntered", true);
 
+        // OnEnter also builds the state's ActiveActions list (via ActivateActions) — the list FsmState.OnUpdate
+        // iterates to run per-frame actions. Skipping OnEnter leaves it empty, so a restored state runs NO OnUpdate:
+        // Wait timers, everyFrame checks etc. freeze — e.g. Cog_Dancers' Beat Control Wait never advances, so the
+        // boss never beats/attacks on resume. Rebuild the list directly from the actions that were active at capture;
+        // Init() only wires refs (fsm/state/owner), it does not reset action runtime, so the captured timers survive.
+        targetState.Fsm = fsm;
+        var activeActions = targetState.ActiveActions;
+        activeActions.Clear();
+        foreach (var action in targetState.Actions) {
+            if (!action.Enabled) {
+                continue;
+            }
+
+            action.Init(targetState);
+            action.Entered = true;
+            if (action.Active && !action.Finished) {
+                activeActions.Add(action);
+            }
+        }
+
         // Skipping OnEnter above loses the OnEnter effects that are *not* snapshottable: a few actions establish
         // live state external to the FSM (a subscription on another object) that no serialized field can capture —
         // e.g. Trigger2dEvent.OnEnter registers a callback on a PlayMakerProxy on *another* GameObject (Cog_Dancers'
