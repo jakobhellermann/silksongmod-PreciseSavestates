@@ -177,15 +177,26 @@ public class ComponentSnapshot {
     }
 }
 
-// GameObject-level state not reachable as a serialized component field — currently the physics layer, which is
-// gameplay state (it decides what the object collides with) a load must restore. Room to grow (active/…) later.
+// GameObject-level state not reachable as a serialized component field: the physics layer (gameplay state — it
+// decides what the object collides with) and the active flag. activeSelf is runtime state a load must restore:
+// e.g. the Cog_Dancers boss's position markers (Pos1..12) are prefab-active and disabled *once* by the Dancer
+// Control FSM's Init OnEnter; since the FSM restore reinstates a later active state without re-running OnEnter, a
+// scene reload brings them back active — capturing/restoring activeSelf reinstates the disable.
 public class GameObjectSnapshot {
     public required string Path;
     public int Layer;
 
+    // Required on load: a savestate that predates this field must fail loudly at deserialization, not fall back to
+    // the bool default (false) and silently deactivate the captured object — e.g. the hero, which then "falls through
+    // / disappears". Missing data is an error here; if we ever want forward-compat, the default must be applied
+    // explicitly (deliberately), never left to the implicit C# default.
+    [JsonProperty(Required = Required.Always)]
+    public bool Active;
+
     public static GameObjectSnapshot Of(GameObject go) => new() {
         Path = ObjectUtils.ObjectPath(go),
         Layer = go.layer,
+        Active = go.activeSelf,
     };
 
     public bool Restore() {
@@ -196,6 +207,10 @@ public class GameObjectSnapshot {
         }
 
         go!.layer = Layer;
+        if (go.activeSelf != Active) {
+            go.SetActive(Active);
+        }
+
         return true;
     }
 }
