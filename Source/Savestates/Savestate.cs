@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using HutongGames.PlayMaker;
+using HutongGames.PlayMaker.Actions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
@@ -226,6 +227,17 @@ public class PlayMakerFsmSnapshot {
     public required Dictionary<string, JToken> Variables;
     public required List<FsmActionSnapshot> Actions;
 
+    // Actions whose OnEnter is re-run on restore (see Restore): their OnEnter establishes live state that lives
+    // *outside* the FSM and so can't be snapshotted — a subscription/callback on another object — and that re-running
+    // is idempotent (no SendEvent/spawn/... to double). Trigger2dEvent(Layer) register a hero-detection callback on a
+    // PlayMakerProxy on the target GameObject (e.g. the Cog_Dancers boss's "Start Range" wake trigger). Extend this
+    // list as other external-registration actions surface (ReceivedDamage, CheckAlertRange, …) — only after checking
+    // the action is genuinely idempotent.
+    private static readonly HashSet<Type> ReArmOnRestore = [
+        typeof(Trigger2dEvent),
+        typeof(Trigger2dEventLayer),
+    ];
+
     // variable types whose value can be serialized by value; refs (GameObject/Object/Material/Texture) and
     // complex containers (Array) are skipped — they're prefab-wired, not runtime state.
     private static bool IsSerializableVariable(VariableType type) {
@@ -330,15 +342,37 @@ public class PlayMakerFsmSnapshot {
             SnapshotSerializer.Populate(stateActions[a.ActionIndex], a.Data);
         }
 
-        // restore the active state directly, without re-running OnEnter actions: Fsm.Update only calls Continue()
+        // Restore the active state directly, without re-running OnEnter actions: Fsm.Update only calls Continue()
         // (which enters the state) when !activeStateEntered, so setting the flag makes it resume UpdateState instead.
+        // This preserves mid-execution runtime (timers etc.) and avoids OnEnter side effects (SendEvent/spawn/...).
         var targetState = fsm.GetState(ActiveState);
         if (targetState == null) {
             Log.Warning($"FSM {FsmName} has no state '{ActiveState}', leaving active state unchanged");
-        } else {
-            fsm.SetFieldValue("activeState", targetState);
-            fsm.SetFieldValue("activeStateName", ActiveState);
-            fsm.SetFieldValue("activeStateEntered", true);
+            return true;
+        }
+
+        fsm.SetFieldValue("activeState", targetState);
+        fsm.SetFieldValue("activeStateName", ActiveState);
+        fsm.SetFieldValue("activeStateEntered", true);
+
+        // Skipping OnEnter above loses the OnEnter effects that are *not* snapshottable: a few actions establish
+        // live state external to the FSM (a subscription on another object) that no serialized field can capture —
+        // e.g. Trigger2dEvent.OnEnter registers a callback on a PlayMakerProxy on *another* GameObject (Cog_Dancers'
+        // "Start Range" → the boss's ENTER/wake trigger). Restoring the state without it leaves the trigger unarmed,
+        // so the boss never wakes. Re-run OnEnter for an allowlist of such actions only — they must be idempotent
+        // (re-running establishes the registration without doubling any SendEvent/spawn/... side effect). This
+        // re-arms regardless of how far the fresh scene's own FSM init had progressed. (A registration set up in an
+        // *earlier* state the FSM has since left is still unreachable — the known mid-fight replay gap.)
+        foreach (var action in targetState.Actions) {
+            if (!ReArmOnRestore.Contains(action.GetType())) {
+                continue;
+            }
+
+            try {
+                action.OnEnter();
+            } catch (Exception e) {
+                Log.Warning($"Could not re-arm {action.GetType().Name} on {FsmName}: {e.Message}");
+            }
         }
 
         return true;
