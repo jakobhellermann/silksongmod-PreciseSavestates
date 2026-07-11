@@ -246,6 +246,13 @@ public class PlayMakerFsmSnapshot {
         typeof(Trigger2dEventLayer),
     ];
 
+    // EaseFsmAction.OnEnter builds an `ease` *delegate* (via SetEasingFunction) from the serialized easeType — a
+    // non-serializable derived value. When we resume an active Ease action's OnUpdate (see the ActiveActions rebuild
+    // in Restore) without having run OnEnter, `ease` is null and OnUpdate NREs invoking it. Rebuild it directly; it's
+    // a pure function of easeType with no side effects and doesn't touch the eased progress (which is serialized).
+    private static readonly MethodInfo? EaseSetEasingFunction =
+        typeof(EaseFsmAction).GetMethod("SetEasingFunction", BindingFlags.NonPublic | BindingFlags.Instance);
+
     // variable types whose value can be serialized by value; refs (GameObject/Object/Material/Texture) and
     // complex containers (Array) are skipped — they're prefab-wired, not runtime state.
     private static bool IsSerializableVariable(VariableType type) {
@@ -421,6 +428,12 @@ public class PlayMakerFsmSnapshot {
             action.Entered = true;
             if (action.Active && !action.Finished) {
                 activeActions.Add(action);
+
+                // Reconstruct OnEnter-computed, non-serializable state the action's OnUpdate needs. Ease actions
+                // rebuild their `ease` delegate from easeType (else OnUpdate NREs on the null delegate).
+                if (action is EaseFsmAction) {
+                    EaseSetEasingFunction?.Invoke(action, null);
+                }
             }
         }
 
