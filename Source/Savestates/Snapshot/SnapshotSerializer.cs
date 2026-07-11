@@ -105,6 +105,11 @@ public static class SnapshotSerializer {
             new QuaternionConverter(),
             new ColorConverter(),
             new Color32Converter(),
+            // tk2dSpriteAnimator must round-trip through the converter even when it's the *root* object of a snapshot
+            // (a boss's own animator, captured directly via ComponentSnapshot.Of). PropertyConverters below only fire
+            // for nested fields (e.g. HealthManager.animator); a root component would otherwise be dumped field-by-
+            // field and restored by field-set, leaving the visible sprite/collider stale. See Tk2dAnimatorConverter.
+            new Tk2dAnimatorConverter(),
             // new AnimatorConverter(), TODO
             new StringEnumConverter(),
         },
@@ -170,6 +175,12 @@ public static class SnapshotSerializer {
             // props (materials/lightmap/…), which we neither want nor can round-trip cleanly.
             { typeof(MeshRenderer), [] },
             { typeof(Renderer), ["enabled"] },
+            // Collider2D toggles `enabled` at runtime — SetCollider(active=…) drives the battle gates' open/closed.
+            // `enabled` is declared on Behaviour and its getter isn't CLR-virtual, so it's not auto-harvested (same
+            // reason Renderer.enabled needs an explicit entry); allowlist it at the Behaviour level. The collider's
+            // geometry levels (Collider2D/BoxCollider2D) harvest nothing (engine props aren't virtual), so a collider
+            // snapshot is just { enabled } — no geometry bloat.
+            { typeof(Behaviour), ["enabled"] },
         },
         PropertyConverters = new Dictionary<Type, JsonConverter> {
             { typeof(tk2dSpriteAnimator), new Tk2dAnimatorConverter() },
