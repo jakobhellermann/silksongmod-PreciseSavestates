@@ -227,6 +227,14 @@ public class PlayMakerFsmSnapshot {
     public required Dictionary<string, JToken> Variables;
     public required List<FsmActionSnapshot> Actions;
 
+    // GameObject-typed FSM variables, captured by the referenced object's hierarchy path (InstanceIDs aren't stable
+    // across a reload). Value-typed vars go in Variables; GameObject refs can't be serialized by value, but they hold
+    // real runtime state — e.g. the Cog_Dancers dancers' "Next Pos"/"Current Pos" (the Pos marker a dash/jump tweens
+    // to, set mid-fight by the sequence via SetFsmGameObject). Without them a resumed dancer's move target is null →
+    // it plays the attack anim but doesn't translate. null value = the var was null at capture. (Non-scene / spawned
+    // targets whose path doesn't resolve on load are left as-is — best effort.)
+    public Dictionary<string, string?>? GameObjectVariables;
+
     // Actions whose OnEnter is re-run on restore (see Restore): their OnEnter establishes live state that lives
     // *outside* the FSM and so can't be snapshotted — a subscription/callback on another object — and that re-running
     // is idempotent (no SendEvent/spawn/... to double). Trigger2dEvent(Layer) register a hero-detection callback on a
@@ -266,6 +274,24 @@ public class PlayMakerFsmSnapshot {
             variables[v.Name] = raw == null ? JValue.CreateNull() : SnapshotSerializer.Snapshot(raw);
         }
 
+        // GameObject-typed vars: capture the referenced scene object's path (see GameObjectVariables).
+        var gameObjectVariables = new Dictionary<string, string?>();
+        foreach (var v in fsm.Variables.GetAllNamedVariables()) {
+            if (v.VariableType != VariableType.GameObject) {
+                continue;
+            }
+
+            GameObject? target;
+            try {
+                target = v.RawValue as GameObject;
+            } catch (Exception e) {
+                Log.Warning($"Could not read FSM GameObject variable {fsm.Name}.{v.Name}: {e.Message}");
+                continue;
+            }
+
+            gameObjectVariables[v.Name] = target ? ObjectUtils.ObjectPath(target!) : null;
+        }
+
         // only the active state has actions mid-execution with meaningful runtime state (timers etc.); actions in
         // other states are re-initialized by OnEnter when next entered, so capturing them is just bloat.
         var actions = new List<FsmActionSnapshot>();
@@ -287,6 +313,7 @@ public class PlayMakerFsmSnapshot {
             FsmName = fsm.Name,
             ActiveState = fsm.ActiveStateName,
             Variables = variables,
+            GameObjectVariables = gameObjectVariables,
             Actions = actions,
         };
     }
@@ -324,6 +351,28 @@ public class PlayMakerFsmSnapshot {
                 }
             } catch (Exception e) {
                 Log.Warning($"Could not restore FSM variable {FsmName}.{v.Name}: {e.Message}");
+            }
+        }
+
+        // restore GameObject-typed vars by resolving the captured path (see GameObjectVariables)
+        if (GameObjectVariables != null) {
+            foreach (var v in fsm.Variables.GetAllNamedVariables()) {
+                if (v.VariableType != VariableType.GameObject ||
+                    !GameObjectVariables.TryGetValue(v.Name, out var path)) {
+                    continue;
+                }
+
+                try {
+                    // a null captured path means the var was null; a non-null path that no longer resolves is left
+                    // as-is
+                    if (path == null) {
+                        v.RawValue = null;
+                    } else if (ObjectUtils.LookupPath(path) is { } resolved) {
+                        v.RawValue = resolved;
+                    }
+                } catch (Exception e) {
+                    Log.Warning($"Could not restore FSM GameObject variable {FsmName}.{v.Name}: {e.Message}");
+                }
             }
         }
 
