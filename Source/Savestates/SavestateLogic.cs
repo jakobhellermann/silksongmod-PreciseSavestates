@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using DevUtils.Toasts;
 using GlobalEnums;
 using HarmonyLib;
+using HutongGames.PlayMaker;
+using HutongGames.PlayMaker.Actions;
 using Newtonsoft.Json.Linq;
 using PreciseSavestates.Savestates.Snapshot;
 using PreciseSavestates.Source;
@@ -25,7 +27,10 @@ public enum SavestateFilter {
     None = 0,
     Player = 1 << 1,
     Scene = 1 << 2,
-    All = Player | Scene,
+    // Bosses/enemies (HealthManager actors) and the active + additive scenes' PlayMaker FSMs — separate from Scene
+    // (SceneData) because it's live actor state, not persisted save data.
+    Enemies = 1 << 3,
+    All = Player | Scene | Enemies,
 }
 
 [Flags]
@@ -109,6 +114,106 @@ public static class SavestateLogic {
                     sceneBehaviours.Add(ComponentSnapshot.Of(camTarget));
                     sceneBehaviours.Add(ComponentSnapshot.Of(camTarget.transform));
                 }
+            }
+        }
+
+        if (filter.HasFlag(SavestateFilter.Enemies)) {
+            // Bosses / enemies live in the active scene and its additive sub-scenes (e.g. Cog_Dancers_boss), not under
+            // the hero root, so the recursive hero snapshot never reaches them. Without capturing them a load reloads
+            // the scene and every enemy resets to full HP / spawn pose / a fresh FSM — a mid-fight resume desyncs
+            // immediately. Capture, for a faithful resume:
+            //  - every active HealthManager: its HP + internal hit/stun state, plus its `animator` field, which is a
+            //    tk2dSpriteAnimator so PropertyConverters serializes the current clip/frame inline (same converter the
+            //    hero's animator uses) — the enemy actor state;
+            //  - its transform (position);
+            //  - every PlayMakerFSM in the active + additive scenes: boss AI/phase/attack-pattern FSMs (Dancer Control,
+            //    Dive Patterns, …) plus arena state (battle-gate + fight-sequence FSMs). Captured broadly ("all scene
+            //    FSMs") — a cosmetic FSM that round-trips is harmless; a non-deterministic one surfaces as a resume diff
+            //    to fix rather than being silently missed.
+            // All resolve by hierarchy path at load time (the additive scenes are preloaded before the snapshot applies).
+            var activeHealthManagers = typeof(HealthManager).GetFieldValue<List<HealthManager>>("_activeHealthManagers");
+            if (activeHealthManagers != null) {
+                foreach (var hm in activeHealthManagers) {
+                    if (!hm) {
+                        continue;
+                    }
+
+                    sceneBehaviours.Add(ComponentSnapshot.Of(hm));
+                    sceneBehaviours.Add(ComponentSnapshot.Of(hm.transform));
+                }
+            }
+
+            var additiveScenes = CurrentAdditiveScenes();
+            var sceneNames = new HashSet<string> { gm.sceneName };
+            sceneNames.UnionWith(additiveScenes);
+            // Anchor on FSM-bearing objects: a PlayMakerFSM drives runtime state (boss AI, gates), and its one-time
+            // OnEnter actions set object-level state — activeSelf (ActivateGameObject), collider `enabled`
+            // (SetCollider), sprite clip (Tk2dPlayAnimation). A scene reload resets those to the prefab default and the
+            // FSM restore resumes the active state directly without re-running OnEnter, so that object-level state is
+            // lost unless captured explicitly. Static scene geometry has no FSM and no such state, so skip it (a full
+            // component snapshot of every object was far too broad).
+            //
+            // For activeSelf we snapshot exactly the objects whose active flag is *runtime-changeable* by these FSMs:
+            // the FSM owners themselves, plus every GameObject targeted by an ActivateGameObject(Delay) action in any
+            // captured FSM. That's the precise set the OnEnter-skipping restore would otherwise leave at the prefab
+            // default — e.g. Dancer Control's "Deactivate Positions" toggles the non-FSM Pos1..12 markers (prefab-
+            // active), so they come back active after a reload unless restored. Resolved via the FSM's own owner-
+            // default resolution, so variable targets (`var "Pos1"`) resolve to the right instance. Capturing only the
+            // toggle targets (not the whole subtree) keeps the snapshot small; both toggle directions are covered
+            // (a prefab-disabled object an FSM enables is a target too). Colliders/sprite animators stay on the FSM
+            // owners (the SetCollider/PlayAnimation targets); widen if a similar gap surfaces.
+            var seenFsmObjects = new HashSet<GameObject>();
+            var gameObjectTargets = new HashSet<GameObject>();
+            foreach (var fsm in PlayMakerFSM.FsmList) {
+                if (!fsm || !sceneNames.Contains(fsm.gameObject.scene.name)) {
+                    continue;
+                }
+
+                fsmSnapshots.Add(PlayMakerFsmSnapshot.Of(fsm));
+
+                var go = fsm.gameObject;
+                gameObjectTargets.Add(go);
+
+                // Every GameObject an ActivateGameObject(Delay) action in this FSM can toggle active/inactive.
+                foreach (var state in fsm.Fsm.States) {
+                    foreach (var action in state.Actions) {
+                        var ownerDefault = action switch {
+                            ActivateGameObject a => a.gameObject,
+                            ActivateGameObjectDelay a => a.gameObject,
+                            _ => null,
+                        };
+                        if (ownerDefault == null) {
+                            continue;
+                        }
+
+                        GameObject? target = null;
+                        try {
+                            target = fsm.Fsm.GetOwnerDefaultTarget(ownerDefault);
+                        } catch (Exception e) {
+                            Log.Warning($"Could not resolve ActivateGameObject target in {fsm.Fsm.Name}: {e.Message}");
+                        }
+
+                        if (target) {
+                            gameObjectTargets.Add(target!);
+                        }
+                    }
+                }
+
+                if (!seenFsmObjects.Add(go)) {
+                    continue;
+                }
+
+                foreach (var collider in go.GetComponents<Collider2D>()) {
+                    sceneBehaviours.Add(ComponentSnapshot.Of(collider));
+                }
+
+                if (go.GetComponent<tk2dSpriteAnimator>() is { } spriteAnimator) {
+                    sceneBehaviours.Add(ComponentSnapshot.Of(spriteAnimator));
+                }
+            }
+
+            foreach (var target in gameObjectTargets) {
+                gameObjectSnapshots.Add(GameObjectSnapshot.Of(target));
             }
         }
 
