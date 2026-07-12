@@ -244,6 +244,7 @@ public static class SavestateLogic {
             GameTime = Time.time,
             GameFrameCount = Time.frameCount,
             FixedUpdateCycle = CustomPlayerLoop.FixedUpdateCycle,
+            HazardRespawn = HazardRespawnSnapshot.Of(global::PlayerData.instance),
             PlayerData = playerData,
             SceneData = sceneData,
         };
@@ -668,6 +669,10 @@ public static class SavestateLogic {
         if (savestate.FixedUpdateCycle is { } fixedUpdateCycle) {
             typeof(CustomPlayerLoop).SetPropertyValue("FixedUpdateCycle", fixedUpdateCycle);
         }
+
+        // Override FinishedEnteringScene's non-deterministic hazard-respawn re-derivation with the captured value
+        // (ApplySnapshot runs after scene entry in both load paths).
+        savestate.HazardRespawn?.Restore();
 
         timing?.Add("apply", applyTotal.ElapsedMilliseconds);
     }
