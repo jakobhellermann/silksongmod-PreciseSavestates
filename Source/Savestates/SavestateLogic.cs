@@ -231,6 +231,7 @@ public static class SavestateLogic {
             // the recursive component snapshot can't reach standalone SceneData.instance.
             gm.SaveLevelState();
             sceneData = JToken.Parse(JsonUtility.ToJson(global::SceneData.instance));
+            CanonicalizeSerializedLists(sceneData);
         }
 
         var savestate = new Savestate {
@@ -250,6 +251,20 @@ public static class SavestateLogic {
         };
 
         return savestate;
+    }
+
+    // SceneData's PersistentItemDataCollection flattens its per-scene dictionaries into `serializedList` in
+    // dictionary-iteration order, which depends on scene load history — so two captures of the same state emit the
+    // same entries in a different order (a spurious diff, not a state difference). Sort each serializedList by
+    // (SceneName, ID) for a canonical, comparable capture; restore rebuilds the keyed dictionary regardless of order.
+    private static void CanonicalizeSerializedLists(JToken token) {
+        foreach (var list in token.SelectTokens("$..serializedList").OfType<JArray>().ToList()) {
+            var sorted = new JArray(list.OfType<JObject>()
+                .OrderBy(e => (string?)e["SceneName"], StringComparer.Ordinal)
+                .ThenBy(e => (string?)e["ID"], StringComparer.Ordinal)
+                .Select(e => e.DeepClone()));
+            list.Replace(sorted);
+        }
     }
 
     /// The distinct RandomAudioClipTable ScriptableObjects referenced by single-valued HeroController fields
