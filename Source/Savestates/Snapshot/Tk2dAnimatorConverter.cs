@@ -2,12 +2,15 @@ using System;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using PreciseSavestates.Utils;
+using UnityEngine;
 
 namespace PreciseSavestates.Savestates.Snapshot;
 
 // Captures a tk2dSpriteAnimator's runtime state as {clip name, clipTime, fps, playing} and restores it via the
 // animator's own API (PlayFrom resolves the clip through the animator's library and refreshes the visible sprite).
 // Writing the clip by name (not by value) avoids serializing the clip definition or mutating the shared library.
+// Also captures the sibling tk2dBaseSprite's `color` (same GameObject): a runtime tint an FSM sets that the
+// OnEnter-skipping restore won't re-apply. Raw floats, since Color is in the resolver's FieldTypesToIgnore.
 public class Tk2dAnimatorConverter : JsonConverter {
     public override bool CanConvert(Type objectType) {
         return objectType == typeof(tk2dSpriteAnimator);
@@ -33,6 +36,18 @@ public class Tk2dAnimatorConverter : JsonConverter {
         writer.WriteValue(animator.ClipFps);
         writer.WritePropertyName("playing");
         writer.WriteValue(animator.Playing);
+
+        if (animator.GetComponent<tk2dBaseSprite>() is { } sprite && sprite) {
+            var c = sprite.color;
+            writer.WritePropertyName("color");
+            writer.WriteStartArray();
+            writer.WriteValue(c.r);
+            writer.WriteValue(c.g);
+            writer.WriteValue(c.b);
+            writer.WriteValue(c.a);
+            writer.WriteEndArray();
+        }
+
         writer.WriteEndObject();
     }
 
@@ -46,6 +61,13 @@ public class Tk2dAnimatorConverter : JsonConverter {
         if (existingValue is not tk2dSpriteAnimator animator || !animator) {
             // we can only restore into a live animator (resolved via the surrounding component); nothing to do otherwise
             return existingValue;
+        }
+
+        // Independent of the clip: a color-setting state need not be an animation state.
+        if (token["color"] is JArray { Count: 4 } color
+            && animator.GetComponent<tk2dBaseSprite>() is { } sprite && sprite) {
+            sprite.color = new Color(
+                color[0].Value<float>(), color[1].Value<float>(), color[2].Value<float>(), color[3].Value<float>());
         }
 
         var clip = token["clip"]?.Value<string>();
