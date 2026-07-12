@@ -273,6 +273,17 @@ public class PlayMakerFsmSnapshot {
         // as a handler — a live registration on a dynamically-added component that no serialized field restores (the
         // proxy component doesn't exist on the freshly-loaded object). Base type: covers all ReceivedDamage* subclasses.
         typeof(ReceivedDamageBase),
+        // FaceObjectV2 / GetAngleToTarget2D cache a resolved GameObject in OnEnter (objectA_object / self, from an
+        // FsmOwnerDefault) and dereference it every OnUpdate. Restoring an enemy AI FSM mid-state without re-running
+        // OnEnter leaves that cache null, so their OnUpdate NREs every frame after a savestate load. Both OnEnter are
+        // idempotent (cache + a facing / angle computation, no SendEvent/spawn), so re-running just re-establishes the
+        // cache.
+        typeof(FaceObjectV2),
+        typeof(GetAngleToTarget2D),
+        // ChaseObjectGround (enemy ground-chase AI): OnEnter caches the rigidbody / self / animator from an
+        // FsmOwnerDefault, then DoChase() every OnFixedUpdate dereferences them. Same restore-without-OnEnter NRE.
+        // OnEnter is idempotent (cache + a DoChase that only sets chase velocity, which OnFixedUpdate would set anyway).
+        typeof(ChaseObjectGround),
     ];
 
     // EaseFsmAction.OnEnter builds an `ease` *delegate* (via SetEasingFunction) from the serialized easeType — a
