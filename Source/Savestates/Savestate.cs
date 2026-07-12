@@ -474,6 +474,17 @@ public class PlayMakerFsmSnapshot {
                 if (action is EaseFsmAction) {
                     EaseSetEasingFunction?.Invoke(action, null);
                 }
+
+                // The tk2d animation-event actions whose OnEnter subscribes the animator's AnimationEventTriggered/
+                // AnimationCompleted delegate and caches a private `_sprite` — the exact members RewireTk2dAnimationEvents
+                // re-establishes. Explicit list (not a member-shape probe) so it's clear which actions are handled.
+                // (Tk2dPlayAnimationWait, tk2dPlayAnimAfterPreviousComplete, WaitTimeAndTk2dFrame, HeroTurnToFace also
+                // subscribe but have a different member layout — not handled here; add them if a case surfaces.)
+                if (action is Tk2dPlayAnimationWithEvents or Tk2dPlayAnimationWithEventsV2 or Tk2dPlayAnimationWithEventsV3
+                    or Tk2dPlayRandomAnimationWithEvents
+                    or Tk2dWatchAnimationEvents or Tk2dWatchAnimationEventsV2 or Tk2dWatchAnimationEventsV3) {
+                    RewireTk2dAnimationEvents(action);
+                }
             }
         }
 
@@ -503,6 +514,44 @@ public class PlayMakerFsmSnapshot {
         }
 
         return true;
+    }
+
+    // tk2d animation-event actions (Play* / Watch* / Wait* families): OnEnter subscribes callbacks onto the animator's
+    // AnimationEventTriggered / AnimationCompleted delegates, which send the FSM event that exits the state, and caches
+    // _sprite that OnUpdate dereferences. Neither is serializable, so a restored animation state resumes the clip but
+    // never fires the event / NREs on the null _sprite and hangs. Re-running OnEnter isn't general (some variants
+    // re-play or re-randomize the clip); re-establish only the wiring — _sprite, optional expectedClip, and the two
+    // delegates (each gated on its event, as OnEnter does). Never plays, so the converter-restored clip is preserved.
+    private void RewireTk2dAnimationEvents(FsmStateAction action) {
+        const BindingFlags priv = BindingFlags.NonPublic | BindingFlags.Instance;
+        const BindingFlags pub = BindingFlags.Public | BindingFlags.Instance;
+        var type = action.GetType();
+        try {
+            // Re-resolve the animator into the private _sprite cache (from the action's FsmOwnerDefault gameObject).
+            type.GetMethod("_getSprite", priv)?.Invoke(action, null);
+            if (type.GetField("_sprite", priv)?.GetValue(action) is not tk2dSpriteAnimator sprite || !sprite) {
+                return;
+            }
+
+            // OnUpdate derefs _sprite.CurrentClip and compares it to expectedClip; seed expectedClip to the current
+            // clip so it neither NREs nor fires a spurious exit, and still detects the *next* clip change.
+            type.GetField("expectedClip", priv)?.SetValue(action, sprite.CurrentClip);
+            type.GetField("hasExpectedClip", priv)?.SetValue(action, sprite.CurrentClip != null);
+
+            if (type.GetField("animationTriggerEvent", pub)?.GetValue(action) != null
+                && type.GetMethod("AnimationEventDelegate", priv) is { } trig) {
+                sprite.AnimationEventTriggered = (Action<tk2dSpriteAnimator, tk2dSpriteAnimationClip, int>)
+                    Delegate.CreateDelegate(typeof(Action<tk2dSpriteAnimator, tk2dSpriteAnimationClip, int>), action, trig);
+            }
+
+            if (type.GetField("animationCompleteEvent", pub)?.GetValue(action) != null
+                && type.GetMethod("AnimationCompleteDelegate", priv) is { } comp) {
+                sprite.AnimationCompleted = (Action<tk2dSpriteAnimator, tk2dSpriteAnimationClip>)
+                    Delegate.CreateDelegate(typeof(Action<tk2dSpriteAnimator, tk2dSpriteAnimationClip>), action, comp);
+            }
+        } catch (Exception e) {
+            Log.Warning($"Could not rewire tk2d animation events for {type.Name} on {FsmName}: {e.Message}");
+        }
     }
 }
 
