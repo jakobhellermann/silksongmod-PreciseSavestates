@@ -140,6 +140,14 @@ public static class SavestateLogic {
 
                     sceneBehaviours.Add(ComponentSnapshot.Of(hm));
                     sceneBehaviours.Add(ComponentSnapshot.Of(hm.transform));
+                    // The body's velocity: physics-driven enemies (e.g. a MossBone Fly's IdleBuzzV3, a
+                    // RigidBody2dActionBase that accelerates rb2d.velocity toward a roam target) resume with a stale
+                    // velocity otherwise — the transform restores the position but the body keeps drifting off it,
+                    // which cascades into a divergent movement/turn. The Rigidbody2D allowlist captures
+                    // position/linearVelocity/gravityScale/bodyType.
+                    if (hm.GetComponent<Rigidbody2D>() is { } rb) {
+                        sceneBehaviours.Add(ComponentSnapshot.Of(rb));
+                    }
                 }
             }
 
