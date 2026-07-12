@@ -61,6 +61,11 @@ public class Savestate {
     // makes savestates byte-reproducible — otherwise the serialized lastUpdate values drift with session age.
     public int? FixedUpdateCycle;
 
+    // Hazard-respawn point (spike/lava death → here). Captured explicitly, not via PlayerData: hazardRespawnLocation
+    // is [NonSerialized], and FinishedEnteringScene re-derives both fields from transient hero state on our dreamGate
+    // entry (non-deterministically). Re-applied after entry in ApplySnapshot so the captured value wins.
+    public HazardRespawnSnapshot? HazardRespawn;
+
     public void SerializeTo(StreamWriter writer) {
         JsonSerializer.Create(jsonSettings).Serialize(writer, this);
     }
@@ -213,6 +218,26 @@ public class GameObjectSnapshot {
         }
 
         return true;
+    }
+}
+
+// See Savestate.HazardRespawn.
+public class HazardRespawnSnapshot {
+    [JsonProperty(Required = Required.Always)]
+    public Vector3 Location;
+
+    [JsonProperty(Required = Required.Always)]
+    public HazardRespawnMarker.FacingDirection Facing;
+
+    public static HazardRespawnSnapshot Of(global::PlayerData pd) => new() {
+        Location = pd.hazardRespawnLocation,
+        Facing = pd.hazardRespawnFacing,
+    };
+
+    public void Restore() {
+        var pd = global::PlayerData.instance;
+        pd.hazardRespawnLocation = Location;
+        pd.hazardRespawnFacing = Facing;
     }
 }
 
