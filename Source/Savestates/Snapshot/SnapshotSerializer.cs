@@ -210,6 +210,12 @@ public static class SnapshotSerializer {
             // their Start (e.g. song_golem's encounteredSongGolem check). Don't also inline it here — that copy would
             // restore post-load, too late, and double the savestate size.
             { typeof(HeroController), ["playerData"] },
+            // CameraController.instantLockedArea is a transient set of camera-lock zones the hero is currently
+            // instant-locked into — the camera re-adds a zone (line ~526) whenever it locks to it under
+            // startLockedTimer > 0, and the set is dormant otherwise (only read there). It even retains stale
+            // destroyed CameraLockArea refs. So it's re-derived runtime state, not worth (and not cleanly able to be)
+            // captured: a HashSet<CameraLockArea> of null/unresolved refs doesn't round-trip. Exclude it.
+            { typeof(CameraController), ["instantLockedArea"] },
         },
     };
 
