@@ -21,13 +21,18 @@ public class SavestateModule(
     ConfigEntry<KeyboardShortcut> openLoad,
     ConfigEntry<KeyboardShortcut> openDelete,
     ConfigEntry<KeyboardShortcut> tabNext,
-    ConfigEntry<KeyboardShortcut> tabPrev
+    ConfigEntry<KeyboardShortcut> tabPrev,
+    ConfigEntry<KeyboardShortcut> quickSave,
+    ConfigEntry<KeyboardShortcut> quickLoad
 ) {
     private static readonly SavestateFilter currentFilter = SavestateFilter.All;
     private static readonly SavestateLoadMode loadMode = SavestateLoadMode.ReloadScene;
 
     private const string SavestateLayerMain = "main";
     private const string SavestateLayerSecondary = "secondary";
+
+    private const string SavestateLayerQuick = "quicksave";
+    private const string SavestateSlotQuick = "quick";
 
     private readonly SavestateStore savestates = new();
 
@@ -150,6 +155,26 @@ public class SavestateModule(
         }
     }
 
+    private void QuickSave() {
+        var scene = SceneManager.GetActiveScene().name;
+        CreateSavestate(scene, SavestateSlotQuick, SavestateLayerQuick);
+    }
+
+    private async void QuickLoad() {
+        try {
+            if (!HasSavestate(SavestateSlotQuick, SavestateLayerQuick)) {
+                ToastManager.Toast("No quicksave to load");
+                return;
+            }
+
+            var sw = Stopwatch.StartNew();
+            await LoadSavestate(SavestateSlotQuick, SavestateLayerQuick);
+            Log.Info($"Loaded quicksave in {sw.ElapsedMilliseconds}ms");
+        } catch (Exception e) {
+            ToastManager.Toast(e);
+        }
+    }
+
     #region UI
 
     private void UiSaveToSlot(int slot) {
@@ -244,6 +269,12 @@ public class SavestateModule(
 
     public void Update() {
         try {
+            if (KeybindManager.CheckShortcutOnly(quickSave.Value)) {
+                QuickSave();
+            } else if (KeybindManager.CheckShortcutOnly(quickLoad.Value)) {
+                QuickLoad();
+            }
+
             if (KeybindManager.CheckShortcutOnly(openLoad.Value)) {
                 UiState = UiState == SavestateUIState.Load ? SavestateUIState.Off : SavestateUIState.Load;
                 UpdateLayer();

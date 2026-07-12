@@ -30,7 +30,9 @@ public partial class PreciseSavestatesPlugin : BaseUnityPlugin {
                 Config.Bind("Savestates", "Load", new KeyboardShortcut(KeyCode.KeypadEnter)),
                 Config.Bind("Savestates", "Delete", new KeyboardShortcut(KeyCode.KeypadMinus)),
                 Config.Bind("Savestates", "Page next", new KeyboardShortcut(KeyCode.RightArrow)),
-                Config.Bind("Savestates", "Page prev", new KeyboardShortcut(KeyCode.LeftArrow))
+                Config.Bind("Savestates", "Page prev", new KeyboardShortcut(KeyCode.LeftArrow)),
+                Config.Bind("Savestates", "Quicksave", new KeyboardShortcut()),
+                Config.Bind("Savestates", "Quickload", new KeyboardShortcut())
             );
             Interop = new Interop(savestateModule);
         } catch (Exception e) {
