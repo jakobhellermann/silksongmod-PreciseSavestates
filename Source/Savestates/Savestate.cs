@@ -269,6 +269,10 @@ public class PlayMakerFsmSnapshot {
     private static readonly HashSet<Type> ReArmOnRestore = [
         typeof(Trigger2dEvent),
         typeof(Trigger2dEventLayer),
+        // ReceivedDamageBase.OnEnter GetOrAdds a ReceivedDamageProxy component on the target and registers this action
+        // as a handler — a live registration on a dynamically-added component that no serialized field restores (the
+        // proxy component doesn't exist on the freshly-loaded object). Base type: covers all ReceivedDamage* subclasses.
+        typeof(ReceivedDamageBase),
     ];
 
     // EaseFsmAction.OnEnter builds an `ease` *delegate* (via SetEasingFunction) from the serialized easeType — a
@@ -470,8 +474,13 @@ public class PlayMakerFsmSnapshot {
         // (re-running establishes the registration without doubling any SendEvent/spawn/... side effect). This
         // re-arms regardless of how far the fresh scene's own FSM init had progressed. (A registration set up in an
         // *earlier* state the FSM has since left is still unreachable — the known mid-fight replay gap.)
-        foreach (var action in targetState.Actions) {
-            if (!ReArmOnRestore.Contains(action.GetType())) {
+        //
+        // Only re-arm the *active* actions (activeActions), not every action of the state: an inactive/finished
+        // allowlisted action never ran OnEnter in a continuous run, so re-arming it would establish a registration
+        // (proxy field) the continuous run doesn't have — a spurious resume diff. Match by base type so a family of
+        // registration actions (ReceivedDamageBase subclasses, …) is covered without listing every subclass.
+        foreach (var action in activeActions) {
+            if (!ReArmOnRestore.Any(t => t.IsInstanceOfType(action))) {
                 continue;
             }
 
