@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using JetBrains.Annotations;
 using PreciseSavestates.Modules;
 using PreciseSavestates.Savestates;
 
@@ -8,6 +9,7 @@ namespace PreciseSavestates;
 /// accessed via reflection through the `Interop` field on
 /// <see cref="Source.PreciseSavestatesPlugin" />
 /// .
+[PublicAPI]
 public class Interop(SavestateModule module) {
     /// Captures the current game state into the given slot/layer. Returns whether it succeeded.
     /// <paramref name="filter" />
