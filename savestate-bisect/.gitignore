@@ -1,1 +1,4 @@
 /Cargo.lock
+
+# min-broken savestates written to cwd by --only / the bisect min-broken pass
+*.min-broken.json
