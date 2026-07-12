@@ -223,6 +223,17 @@ public static class SavestateLogic {
             foreach (var target in gameObjectTargets) {
                 gameObjectSnapshots.Add(GameObjectSnapshot.Of(target));
             }
+
+            // BattleScene is a plain MonoBehaviour (no FSM / HealthManager) holding the wave progression, so nothing
+            // above reaches it; without it a reload resets the arena to an un-started battle.
+            foreach (var battleScene in UnityEngine.Object.FindObjectsByType<BattleScene>(FindObjectsInactive.Include,
+                         FindObjectsSortMode.None)) {
+                if (!battleScene || !sceneNames.Contains(battleScene.gameObject.scene.name)) {
+                    continue;
+                }
+
+                sceneBehaviours.Add(ComponentSnapshot.Of(battleScene));
+            }
         }
 
         JToken? playerData = null;
