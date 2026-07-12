@@ -697,6 +697,15 @@ public static class SavestateLogic {
         // (ApplySnapshot runs after scene entry in both load paths).
         savestate.HazardRespawn?.Restore();
 
+        // The HUD canvas persists across the scene reload, so its health_display FSMs still show the pre-load HP —
+        // re-init them against the now-restored PlayerData.health. Silent (no break sound / DAMAGE TAKEN), so safe
+        // for a traced resume too. Gated on a non-empty scene because that's exactly when PlayerData (and thus
+        // health) was restored — the scene-load path is the only one that overwrites it; the scene-less idle-fixture
+        // apply leaves PlayerData untouched, so there's nothing for the HUD to catch up to.
+        if (!string.IsNullOrEmpty(savestate.Scene)) {
+            HudFixes.RefreshHealthHud();
+        }
+
         timing?.Add("apply", applyTotal.ElapsedMilliseconds);
     }
 
