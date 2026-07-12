@@ -92,40 +92,26 @@ public class CustomizableContractResolver : DefaultContractResolver {
                Array.Exists(FieldTypesToIgnore, x => x.IsAssignableFrom(type));
     }
 
-    // Returns true if at least one of the type's members is ignored during serialization
-    // (e.g. a ScriptableObject or GameObject field), so a round-trip can't reproduce the full instance.
+    // Returns true if reconstructing `type` from scratch would lose content — i.e. some member reachable through it
+    // (following collection element types *and* plain-object members) is ignored during serialization (e.g. a
+    // ScriptableObject or GameObject field). Used only to skip collection members, whose elements are rebuilt fresh
+    // and so cannot fall back on in-place-populated live values. The recursion lives in SerializabilityAnalyzer (pure,
+    // unit-tested); the engine-specific decisions are injected here.
     private bool HasUnserializableContent(Type type) {
-        if (type.IsPrimitive || type.IsEnum || type.IsValueType || type == typeof(string)) {
-            return false;
-        }
+        return SerializabilityAnalyzer.HasUnserializableContent(
+            type,
+            IgnorePropertyType,
+            IsReconstructableLeaf,
+            objectType => GetSerializableMembers(objectType));
+    }
 
-        if (typeof(Object).IsAssignableFrom(type)) {
-            return false;
-        }
-
-        if (RefType(type)) {
-            return false;
-        }
-
-        var members = GetSerializableMembers(type);
-        foreach (var m in members) {
-            var memberType = m is FieldInfo fi ? fi.FieldType : ((PropertyInfo)m).PropertyType;
-            var inner = memberType;
-            if (inner.IsArray) {
-                inner = inner.GetElementType()!;
-            } else if (inner.IsGenericType) {
-                var def = inner.GetGenericTypeDefinition();
-                if (def == typeof(List<>) || def == typeof(HashSet<>)) {
-                    inner = inner.GetGenericArguments()[0];
-                }
-            }
-
-            if (IgnorePropertyType(inner)) {
-                return true;
-            }
-        }
-
-        return false;
+    // Types with no capturable sub-structure that could be lost: primitives/enum/string, and Unity Object / Component
+    // refs (handled by RefConverter or ignored at the member level, not rebuilt by value). Note value types other than
+    // the above are NOT leaves: a struct reached through a collection is rebuilt fresh too, so it must round-trip.
+    private bool IsReconstructableLeaf(Type type) {
+        return type.IsPrimitive || type.IsEnum || type == typeof(string)
+               || typeof(Object).IsAssignableFrom(type)
+               || RefType(type);
     }
 
     protected override JsonProperty CreateProperty(MemberInfo member, MemberSerialization memberSerialization) {
