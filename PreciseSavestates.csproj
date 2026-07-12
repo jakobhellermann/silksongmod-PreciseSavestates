@@ -4,6 +4,10 @@
     If you are checking out from git and need to create a new one, you can use `dotnet new silksongpath` to generate one.
     -->
     <Import Condition="Exists('SilksongPath.props')" Project="SilksongPath.props"/>
+    <!-- The tests/ subdir is its own (net10) test project; keep its sources out of the mod's default compile glob. -->
+    <ItemGroup>
+        <Compile Remove="tests/**/*.cs"/>
+    </ItemGroup>
     <PropertyGroup>
         <TargetFramework>netstandard2.1</TargetFramework>
         <LangVersion>latest</LangVersion>
