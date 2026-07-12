@@ -124,6 +124,11 @@ public static class SnapshotSerializer {
         FieldTypesToIgnore = [
             // ignored
             typeof(Camera),
+            // A Coroutine is a native-handle wrapper (an IntPtr m_Ptr into the engine's running-coroutine table). A
+            // non-null one serializes that raw pointer, which is invalid after a reload; the restored garbage handle
+            // then crashes when the game stops it (StopCoroutine) or the GC finalizes it. Not restorable — exclude so
+            // the field stays null, the safe default the game's null-guards expect.
+            typeof(Coroutine),
             typeof(GameObject),
             typeof(UnityEventBase),
             typeof(Action),
