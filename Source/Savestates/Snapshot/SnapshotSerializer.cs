@@ -223,9 +223,18 @@ public static class SnapshotSerializer {
             // --- explicit denylisted "skip unserializable type" warnings ---
             { typeof(RunEffects), ["runTypes"] },
             { typeof(InputHandler), ["MappableControllerActions", "MappableKeyboardActions"] },
-            { typeof(HeroVibrationController), ["audioClipVibrations"] },
+            { typeof(HeroVibrationController), ["audioClipVibrations", "emissions"] },
             { typeof(SpriteFlash), ["repeatingFlashes"] },
-            { typeof(DamageEnemies), ["spikeSlashReactions"] },
+            { typeof(GameManager), ["skippables"] },
+            {
+                typeof(DamageEnemies),
+                [
+                    // static config
+                    "spikeSlashReactions",
+                    // scratch
+                    "hitsResponded", "tempHitsResponded", "damagePrevented", "currentDamageBuffer", "processingDamageBuffer"
+                ]
+            },
             { typeof(tk2dTileMap), ["layers", "tilePrefabsList"] },
             { typeof(HealthManager), ["itemDropGroups", "_itemDrops"] },
             { typeof(EnemyDeathEffects), ["altCorpses", "deathSounds"] },

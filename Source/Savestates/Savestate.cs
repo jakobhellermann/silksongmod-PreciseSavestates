@@ -271,6 +271,8 @@ public class PlayMakerFsmSnapshot {
     private static readonly HashSet<Type> ReArmOnRestore = [
         typeof(Trigger2dEvent),
         typeof(Trigger2dEventLayer),
+        typeof(SendTrigger2DEvent),
+        typeof(Collision2dEventLayer),
         // ReceivedDamageBase.OnEnter GetOrAdds a ReceivedDamageProxy component on the target and registers this action
         // as a handler — a live registration on a dynamically-added component that no serialized field restores (the
         // proxy component doesn't exist on the freshly-loaded object). Base type: covers all ReceivedDamage* subclasses.
@@ -303,6 +305,17 @@ public class PlayMakerFsmSnapshot {
         ("Silk Specials", "Voice"),
         ("Tool Attacks", "Get Item"),
         ("Chest Control", "Hit Sound"),
+        ("Inspection", "End Audio Snapshot"),
+        ("Inspection", "End Enviro Snapshot"),
+        ("pilgrim_behaviour", "Audio Table Idle"),
+        ("pilgrim_behaviour", "Audio Table Alert"),
+        ("pilgrim_behaviour", "Audio Table Sing"),
+        ("Control", "Route Points"),
+        ("Control", "Clip"),
+        ("Sway", "Ambient Chain Audio"),
+        ("Detect Landing", "Land Audio Table"),
+        ("Detect Landing", "Land Audio Table 2"),
+        ("Detect Landing", "Tink Audio Table"),
     };
 
     private static bool IsSerializableVariable(VariableType type) {
