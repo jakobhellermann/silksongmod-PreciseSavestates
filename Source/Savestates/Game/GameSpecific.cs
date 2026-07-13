@@ -69,6 +69,8 @@ public static class GameSpecific {
             // not previousAlpha, so OnLateUpdate notices the changed alpha and applies it
             { typeof(NestedFadeGroupBase), [nameof(NestedFadeGroupBase.alpha)] },
             { typeof(NestedFadeGroup), [] },
+            // the targets GenerateTargets derived at tween start, and the progress through them
+            { typeof(iTween), ["vector3s", "vector2s", "floats", "colors", "rects", "runningTime", "percentage", "reverse"] },
         },
         PropertyConverters = new Dictionary<Type, JsonConverter>(),
         FieldDenylist = new Dictionary<Type, string[]> {

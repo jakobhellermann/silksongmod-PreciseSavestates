@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -148,6 +149,9 @@ public class PlayMakerFsmSnapshot {
                     SubFsm = action is RunFSMAction { Active: true, Finished: false } run
                         ? Of(run.runFsm, owner)
                         : null,
+                    ITween = action is iTweenFsmAction it && FindTween(it) is { isRunning: true } tween
+                        ? SnapshotSerializer.Snapshot(tween)
+                        : null,
                 });
             }
         }
@@ -188,6 +192,17 @@ public class PlayMakerFsmSnapshot {
 
         RestoreInto(fsmComponent.Fsm);
         return fsmComponent;
+    }
+
+    private static iTween? FindTween(iTweenFsmAction action) {
+        if (action.itweenEvents is not { } events) {
+            return null;
+        }
+
+        // iTween boxes oncompleteparams as a float, not the int it was passed
+        return events.GetComponents<iTween>().FirstOrDefault(tween =>
+            tween.GetFieldValue<Hashtable>("tweenArguments")?["oncompleteparams"] is { } ocp
+            && Convert.ToInt32(ocp) == action.itweenID);
     }
 
     private void RestoreInto(Fsm fsm) {
@@ -368,6 +383,20 @@ public class PlayMakerFsmSnapshot {
                 action.OnEnter();
             }
         }
+
+        foreach (var a in Actions) {
+            if (a.ITween is not { } tween) {
+                continue;
+            }
+
+            var action = states[a.StateIndex].Actions[a.ActionIndex];
+            if (action is not iTweenFsmAction it) {
+                Log.Error($"Savestate stored an iTween for {Path} {FsmName} '{states[a.StateIndex].Name}' action {a.ActionIndex}, which is a {action.GetType().Name}");
+                continue;
+            }
+
+            ResumeITween(it, tween);
+        }
     }
 
     // 24 actions cache a `FsmGameObject self` with the same pattern
@@ -380,6 +409,23 @@ public class PlayMakerFsmSnapshot {
         }
 
         selfField.SetValue(action, (FsmGameObject)action.Fsm.GetOwnerDefaultTarget(owner));
+    }
+
+    // The live tween's delegates aren't serializable: relaunch it via OnEnter (rebuilding the finish wiring), then
+    // overwrite its generated targets and progress with the captured ones.
+    private void ResumeITween(iTweenFsmAction action, JToken data) {
+        action.OnEnter();
+        if (FindTween(action) is not { } tween) {
+            Log.Error($"Could not find the relaunched {action.GetType().Name} tween on {Path} {FsmName}.{ActiveState}");
+            return;
+        }
+
+        // TweenStart's first-run setup, done now so the captured state overwrites it
+        tween.InvokeMethod("ConflictCheck");
+        tween.InvokeMethod("GenerateTargets");
+        SnapshotSerializer.Populate(tween, data);
+        // makes the pending TweenStart skip that setup
+        tween.SetFieldValue("loop", true);
     }
 
     // tk2d animation-event actions (Play* / Watch* / Wait* families): OnEnter subscribes callbacks onto the animator's
@@ -427,4 +473,6 @@ public class FsmActionSnapshot {
     public required JToken Data;
 
     public PlayMakerFsmSnapshot? SubFsm;
+
+    public JToken? ITween;
 }
