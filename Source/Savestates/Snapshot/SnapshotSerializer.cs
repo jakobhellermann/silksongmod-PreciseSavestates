@@ -210,7 +210,7 @@ public static class SnapshotSerializer {
             // root (see SavestateLogic) so it can be restored *before* the scene's persistent objects/FSMs read it in
             // their Start (e.g. song_golem's encounteredSongGolem check). Don't also inline it here — that copy would
             // restore post-load, too late, and double the savestate size.
-            { typeof(HeroController), ["playerData"] },
+            { typeof(HeroController), ["playerData", "configs", "specialConfigs"] },
             // CameraController.instantLockedArea is a transient set of camera-lock zones the hero is currently
             // instant-locked into — the camera re-adds a zone (line ~526) whenever it locks to it under
             // startLockedTimer > 0, and the set is dormant otherwise (only read there). It even retains stale
@@ -219,7 +219,18 @@ public static class SnapshotSerializer {
             { typeof(CameraController), ["instantLockedArea"] },
             // CallStaticMethod caches its resolved MethodInfo/Type/ParameterInfo (unresolvable) keyed on cachedClassName/cachedMethodName
             // Skipping it recomputes the cache.
-            { typeof(CallStaticMethod), ["cachedClassName", "cachedMethodName"] },
+            { typeof(CallStaticMethod), ["cachedClassName", "cachedMethodName", "parameters"] },
+            // --- explicit denylisted "skip unserializable type" warnings ---
+            { typeof(RunEffects), ["runTypes"] },
+            { typeof(InputHandler), ["MappableControllerActions", "MappableKeyboardActions"] },
+            { typeof(HeroVibrationController), ["audioClipVibrations"] },
+            { typeof(SpriteFlash), ["repeatingFlashes"] },
+            { typeof(DamageEnemies), ["spikeSlashReactions"] },
+            { typeof(tk2dTileMap), ["layers", "tilePrefabsList"] },
+            { typeof(HealthManager), ["itemDropGroups", "_itemDrops"] },
+            { typeof(EnemyDeathEffects), ["altCorpses", "deathSounds"] },
+            { typeof(EventRelayResponder), ["responses"] },
+            { typeof(CallMethodProper), ["parameters"] },
         },
     };
 
