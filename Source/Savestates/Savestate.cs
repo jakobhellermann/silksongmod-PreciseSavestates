@@ -28,6 +28,8 @@ public class Savestate {
     public int? GameFrameCount;
     public int? FixedUpdateCycle; // CustomPlayerLoop.FixedUpdateCycle
 
+    public string? MusicCue;
+
     // Separated from component snapshot, due to required load order
     public JToken? PlayerData;
     public JToken? SceneData;

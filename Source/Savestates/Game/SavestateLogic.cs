@@ -15,6 +15,7 @@ using PreciseSavestates.Source.Savestates.Snapshot;
 using PreciseSavestates.Utils;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
+using UnityEngine.Audio;
 using UnityEngine.SceneManagement;
 using Component = UnityEngine.Component;
 using Random = UnityEngine.Random;
@@ -206,6 +207,7 @@ public static class SavestateLogic {
             GameTime = Time.time,
             GameFrameCount = Time.frameCount,
             FixedUpdateCycle = CustomPlayerLoop.FixedUpdateCycle,
+            MusicCue = gm.AudioManager.CurrentMusicCue ? gm.AudioManager.CurrentMusicCue.name : null,
             HazardRespawn = HazardRespawnSnapshot.Of(PlayerData.instance),
             PlayerData = playerData,
             SceneData = sceneData,
@@ -273,11 +275,19 @@ public static class SavestateLogic {
             throw new Exception($"Can't load savestate in state {gm.GameState}");
         }
 
+        // CustomSceneManagerReady (the MusicRestore hook) only fires on a fresh scene entry, not a same-scene reload,
+        // so a same-scene reload's scheduled restore would linger and hijack the next scene's music. Detect it now to
+        // discard the pending after the load below.
+        var sameSceneReload = !silent && savestate.Scene == gm.sceneName;
+
+
         // Cancel in-flight death/respawn/invuln coroutines
         LoadCoroutineCleanup.Run();
 
         var sw = Stopwatch.StartNew();
         if (!string.IsNullOrEmpty(savestate.Scene)) {
+            MusicRestore.SchedulePendingRestore(savestate.MusicCue);
+
             // TODO: is this still necessary here? check SceneAdditiveLoadConditional encounteredSongGolem
             if (savestate.PlayerData is { } earlyPlayerData) {
                 JsonUtility.FromJsonOverwrite(earlyPlayerData.ToString(), global::PlayerData.instance);
@@ -346,6 +356,10 @@ public static class SavestateLogic {
             pendingTiming = timing;
         } else {
             ApplySnapshot(savestate, timing);
+            if (sameSceneReload) {
+                MusicRestore.DiscardPending();
+            }
+
             if (!silent) {
                 timing.LogSummary();
             }
