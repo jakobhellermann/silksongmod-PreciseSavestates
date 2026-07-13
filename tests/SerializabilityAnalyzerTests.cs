@@ -142,6 +142,40 @@ public class SerializabilityAnalyzerTests {
         Assert.False(Check(typeof(HoldsRefLeaves)));
     }
 
+    // ---- interface / abstract element types can't be reconstructed (no concrete type to instantiate) ----
+    // e.g. BattleScene.initialisables is an IInitialisable[]; a rebuilt element has no concrete type to construct.
+
+    private interface INonRef { }
+
+    private abstract class AbstractBase {
+        public int x;
+    }
+
+    private sealed class HoldsInterface {
+        public List<INonRef> items = new();
+    }
+
+    private sealed class HoldsAbstract {
+        public AbstractBase[] items = Array.Empty<AbstractBase>();
+    }
+
+    private sealed class HoldsRefInterface {
+        public List<IRefLike> refs = new();
+    }
+
+    [Fact]
+    public void Interface_element_is_flagged() => Assert.True(Check(typeof(HoldsInterface)));
+
+    [Fact]
+    public void Abstract_element_is_flagged() => Assert.True(Check(typeof(HoldsAbstract)));
+
+    [Fact]
+    public void Ref_like_interface_element_is_not_flagged() {
+        // a leaf wins over the interface/abstract check: ref-handled interfaces aren't rebuilt by value
+        Assert.True(IsLeaf(typeof(IRefLike)));
+        Assert.False(Check(typeof(HoldsRefInterface)));
+    }
+
     // ---- cycle guard: self-referential graphs terminate ----
 
     private sealed class Ring {
