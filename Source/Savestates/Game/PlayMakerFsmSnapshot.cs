@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -146,11 +147,13 @@ public class PlayMakerFsmSnapshot {
         if (activeStateIndex >= 0) {
             var stateActions = states[activeStateIndex].Actions;
             for (var ai = 0; ai < stateActions.Length; ai++) {
-                actions.Add(new FsmActionSnapshot {
+                var snap = new FsmActionSnapshot {
                     StateIndex = activeStateIndex,
                     ActionIndex = ai,
                     Data = SnapshotSerializer.Snapshot(stateActions[ai]),
-                });
+                };
+                CaptureITween(stateActions[ai], snap);
+                actions.Add(snap);
             }
         }
 
@@ -163,6 +166,31 @@ public class PlayMakerFsmSnapshot {
             ObjectVariables = objectVariables,
             Actions = actions,
         };
+    }
+
+    // Record a running iTween's absolute end + remaining time. The live tween (dynamic iTween component + coroutine +
+    // non-serializable ease/apply delegates) can't be snapshotted; Restore relaunches it from these. Generic over all
+    // iTween actions: itweenEvents (added on the moved object while the tween runs) locates it, itweenID matches it.
+    private static void CaptureITween(FsmStateAction action, FsmActionSnapshot snap) {
+        if (action is not iTweenFsmAction it || it.GetFieldValue<iTweenFSMEvents>("itweenEvents") is not { } events) {
+            return;
+        }
+
+        var id = it.GetFieldValue<int>("itweenID");
+        foreach (var tween in events.gameObject.GetComponents<iTween>()) {
+            // iTween boxes oncompleteparams as a float (System.Single), not the int it was passed — compare numerically.
+            if (tween.GetFieldValue<Hashtable>("tweenArguments") is not { } args ||
+                args["oncompleteparams"] is not { } ocp || Convert.ToInt32(ocp) != id) {
+                continue;
+            }
+
+            if (tween.GetFieldValue<Vector3[]>("vector3s") is { Length: > 1 } v) {
+                snap.ITweenEnd = v[1];
+                snap.ITweenRemaining = Mathf.Max(0f, tween.time - tween.GetFieldValue<float>("runningTime"));
+            }
+
+            return;
+        }
     }
 
     public bool Restore() {
@@ -330,6 +358,21 @@ public class PlayMakerFsmSnapshot {
             }
         }
 
+        // Resume active iTweens. The live tween is gone (dynamic component + coroutine + non-serializable delegates),
+        // so relaunch via OnEnter — which rebuilds the tween and its iTweenFSMEvents finish wiring — but with the
+        // action's target/time temporarily adjusted so it continues from the restored state to the same end over the
+        // captured remaining time, instead of restarting the whole tween.
+        foreach (var a in Actions) {
+            if (a.ITweenRemaining is not { } remaining || a.StateIndex >= states.Length) {
+                continue;
+            }
+
+            var stateActions = states[a.StateIndex].Actions;
+            if (a.ActionIndex < stateActions.Length && stateActions[a.ActionIndex] is iTweenFsmAction it) {
+                ResumeITween(it, a.ITweenEnd, remaining);
+            }
+        }
+
         return true;
     }
 
@@ -343,6 +386,48 @@ public class PlayMakerFsmSnapshot {
         }
 
         selfField.SetValue(action, (FsmGameObject)action.Fsm.GetOwnerDefaultTarget(owner));
+    }
+
+    // Relaunch an iTween mid-flight. OnEnter rebuilds the tween + finish wiring; we temporarily patch the action so it
+    // targets the captured end over the remaining time (DoiTween copies these into the tween immediately, so restoring
+    // the fields afterwards is safe). Absolute tweens (MoveTo) keep their authored target and only shorten time;
+    // relative ones (MoveBy) get their delta rewritten to (end - current position). For non-linear easeTypes the ease
+    // curve restarts over the remaining segment — endpoint + duration exact, only the velocity profile approximated.
+    private void ResumeITween(iTweenFsmAction action, Vector3? end, float remaining) {
+        try {
+            switch (action) {
+                case iTweenMoveTo moveTo: {
+                    var orig = moveTo.time.Value;
+                    try {
+                        moveTo.time.Value = remaining;
+                        moveTo.OnEnter();
+                    } finally {
+                        moveTo.time.Value = orig;
+                    }
+
+                    break;
+                }
+                case iTweenMoveBy moveBy
+                    when end is { } e && moveBy.Fsm.GetOwnerDefaultTarget(moveBy.gameObject) is { } target: {
+                    var origVector = moveBy.vector.Value;
+                    var origTime = moveBy.time.Value;
+                    try {
+                        moveBy.vector.Value = e - target.transform.position;
+                        moveBy.time.Value = remaining;
+                        moveBy.OnEnter();
+                    } finally {
+                        moveBy.vector.Value = origVector;
+                        moveBy.time.Value = origTime;
+                    }
+
+                    break;
+                }
+                // TODO: iTweenRotateTo / iTweenScaleTo (absolute, shorten time) and iTweenScaleBy (relative) — same
+                // pattern, per-type target field.
+            }
+        } catch (Exception ex) {
+            Log.Warning($"Could not resume {action.GetType().Name} on {FsmName}.{ActiveState}: {ex.Message}");
+        }
     }
 
     // tk2d animation-event actions (Play* / Watch* / Wait* families): OnEnter subscribes callbacks onto the animator's
@@ -388,4 +473,9 @@ public class FsmActionSnapshot {
     public required int StateIndex;
     public required int ActionIndex;
     public required JToken Data;
+
+    // Set for an active iTween: the tween's absolute end (vector3s[1]) and remaining time at capture, used by Restore
+    // to relaunch it continuing to the same end (see CaptureITween / ResumeITween).
+    public Vector3? ITweenEnd;
+    public float? ITweenRemaining;
 }
