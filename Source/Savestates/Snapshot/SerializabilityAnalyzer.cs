@@ -4,33 +4,18 @@ using System.Reflection;
 
 namespace PreciseSavestates.Savestates;
 
-// Pure, engine-agnostic graph walk used by CustomizableContractResolver to decide whether a *collection member*
-// can be round-tripped. It has no Unity/Newtonsoft/BepInEx dependency (the engine-specific decisions are injected as
-// delegates) so it can be unit-tested by linking this source into a plain test project.
-//
-// Why the walk goes all the way down: a collection deserializes by *replacing* its elements with fresh instances
-// (ObjectCreationHandling.Replace), so the whole element subtree is rebuilt from JSON. If anything reachable from an
-// element is dropped during serialization (an ignored type), the reconstructed element comes back partial — a null
-// where the live object had a value. The in-place-populate escape hatch that keeps a top-level component safe does
-// NOT apply once you cross a collection: from there down every member, plain-object members included, must round-trip.
-// Concretely: HealthManager.itemDropGroups is List<ItemDropGroup>; ItemDropGroup holds Drops (List<ItemDropProbability>)
-// whose element has a Unity Object ref. A shallow (one-level) check judged ItemDropGroup serializable, so the list was
-// written but each element came back with Drops == null -> ClearItemDropsBattleScene() NRE. Recursing catches it.
+// Classes are deserialized in place, updating the current object. That way, partial snapshots are supported
+// and leave the unsnapshotted values in place.
+// In collections however, you cannot in-place deserialize, since the original entries are replaced entirely.
 internal static class SerializabilityAnalyzer {
-    // True if reconstructing `type` from scratch would lose content, i.e. some member reachable through it (following
-    // both collection element types and plain-object members) is an ignored/unserializable type.
-    //   isIgnored     — the resolver's IgnorePropertyType (a member typed like this is dropped on serialize).
-    //   isLeaf        — types with no capturable sub-structure to lose: primitives/enum/string, and Unity Object /
-    //                   Component refs (those are ref-handled or ignored at the member level, not rebuilt by value).
-    //   getMembers    — the resolver's GetSerializableMembers (honours allow/denylist, so a deliberately-denylisted
-    //                   member does not count as lost content).
+    // True if reconstructing `type` from scratch would lose content, since the type contains unserializable values
     public static bool HasUnserializableContent(
         Type type,
         Func<Type, bool> isIgnored,
         Func<Type, bool> isLeaf,
         Func<Type, IEnumerable<MemberInfo>> getMembers
     ) {
-        return Walk(type, isIgnored, isLeaf, getMembers, new HashSet<Type>());
+        return Walk(type, isIgnored, isLeaf, getMembers, []);
     }
 
     private static bool Walk(
@@ -70,8 +55,8 @@ internal static class SerializabilityAnalyzer {
         return false;
     }
 
-    // Peels array / List<> / HashSet<> / Dictionary<,>-value wrappers down to the contained element type, repeatedly
-    // (e.g. List<List<T>> -> T). A non-collection type is returned unchanged.
+    // Extracts item type from array / List<> / HashSet<> / Dictionary<,>-value wrappers, repeatedly
+    // (e.g. List<List<T>> -> T).
     private static Type ElementType(Type type) {
         while (true) {
             if (type.IsArray) {

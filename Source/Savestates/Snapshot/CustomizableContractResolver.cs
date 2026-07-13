@@ -24,9 +24,7 @@ public class CustomizableContractResolver : DefaultContractResolver {
     public Dictionary<Type, string[]> FieldAllowlist = new();
     public Dictionary<Type, string[]> FieldDenylist = new();
 
-    // custom converter per (exact) field type — lets callers hook arbitrary capture/restore logic for types that
-    // can't be round-tripped by raw field copy (e.g. tk2dSpriteAnimator: write clip name + time, restore via PlayFrom).
-    // Takes precedence over the built-in Component->RefConverter handling.
+    // Exact type match for custom converters
     public Dictionary<Type, JsonConverter> PropertyConverters = new();
 
     // checks exact
@@ -58,11 +56,7 @@ public class CustomizableContractResolver : DefaultContractResolver {
 
             list.AddRange(ty.GetFields(FieldBindingFlags | BindingFlags.DeclaredOnly)
                 .Where(field => field.GetCustomAttribute<CompilerGeneratedAttribute>() == null));
-            // Capture properties that hold real state: a virtual getter (Unity engine-backed, e.g. Transform.position)
-            // or a compiler-generated getter (an auto-property = a field with sugar, e.g.
-            // HeroAnimationController.actorState). Setter visibility is irrelevant — a private set still backs real
-            // state; it's restored through the private setter (see CreateProperty). Computed properties (hand-written
-            // accessors that derive from other state) are neither virtual nor compiler-generated, so they're skipped.
+            // Capture properties that hold state, e.g. { get; private set; }
             list.AddRange(ty
                 .GetProperties(PropertyBindingFlags | BindingFlags.DeclaredOnly)
                 .Where(prop => prop.CanRead && prop.CanWrite && prop.GetMethod is { } getter
@@ -92,22 +86,14 @@ public class CustomizableContractResolver : DefaultContractResolver {
                Array.Exists(FieldTypesToIgnore, x => x.IsAssignableFrom(type));
     }
 
-    // Returns true if reconstructing `type` from scratch would lose content — i.e. some member reachable through it
-    // (following collection element types *and* plain-object members) is ignored during serialization (e.g. a
-    // ScriptableObject or GameObject field). Used only to skip collection members, whose elements are rebuilt fresh
-    // and so cannot fall back on in-place-populated live values. The recursion lives in SerializabilityAnalyzer (pure,
-    // unit-tested); the engine-specific decisions are injected here.
+    // Returns true if reconstructing `type` from scratch inside a collection would lose data
     private bool HasUnserializableContent(Type type) {
         return SerializabilityAnalyzer.HasUnserializableContent(
             type,
             IgnorePropertyType,
             IsReconstructableLeaf,
-            objectType => GetSerializableMembers(objectType));
+            GetSerializableMembers);
     }
-
-    // Types with no capturable sub-structure that could be lost: primitives/enum/string, and Unity Object / Component
-    // refs (handled by RefConverter or ignored at the member level, not rebuilt by value). Note value types other than
-    // the above are NOT leaves: a struct reached through a collection is rebuilt fresh too, so it must round-trip.
     private bool IsReconstructableLeaf(Type type) {
         return type.IsPrimitive || type.IsEnum || type == typeof(string)
                || typeof(Object).IsAssignableFrom(type)

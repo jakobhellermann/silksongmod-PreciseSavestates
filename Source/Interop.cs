@@ -2,6 +2,7 @@ using System.Threading.Tasks;
 using JetBrains.Annotations;
 using PreciseSavestates.Modules;
 using PreciseSavestates.Savestates;
+using PreciseSavestates.Savestates.Game;
 
 namespace PreciseSavestates;
 
