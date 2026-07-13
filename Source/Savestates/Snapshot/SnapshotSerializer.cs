@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using HutongGames.PlayMaker;
+using HutongGames.PlayMaker.Actions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
@@ -216,6 +217,9 @@ public static class SnapshotSerializer {
             // destroyed CameraLockArea refs. So it's re-derived runtime state, not worth (and not cleanly able to be)
             // captured: a HashSet<CameraLockArea> of null/unresolved refs doesn't round-trip. Exclude it.
             { typeof(CameraController), ["instantLockedArea"] },
+            // CallStaticMethod caches its resolved MethodInfo/Type/ParameterInfo (unresolvable) keyed on cachedClassName/cachedMethodName
+            // Skipping it recomputes the cache.
+            { typeof(CallStaticMethod), ["cachedClassName", "cachedMethodName"] },
         },
     };
 
