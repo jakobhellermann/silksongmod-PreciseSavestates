@@ -174,9 +174,10 @@ public class CustomizableContractResolver : DefaultContractResolver {
             }
         }
 
+        var isItemRefType = RefType(itemType);
         if (PropertyConverters.TryGetValue(itemType, out var customConverter)) {
             property.Converter = customConverter;
-        } else if (RefType(itemType)) {
+        } else if (isItemRefType) {
             property.Converter = new RefConverter(0);
         }
 
@@ -190,7 +191,19 @@ public class CustomizableContractResolver : DefaultContractResolver {
                 $"Auto-skipping {member.DeclaringType?.Name}.{member.Name}: {itemType.Name} has unserializable members");
         }
 
-        property.ShouldSerialize = _ => shouldSerialize;
+        if (!isCollection && isItemRefType) {
+            // Omit prefab components (invalid scene)
+            property.ShouldSerialize = instance => {
+                if (!shouldSerialize) {
+                    return false;
+                }
+
+                var value = property.ValueProvider?.GetValue(instance);
+                return value is not Component c || c.gameObject.scene.IsValid();
+            };
+        } else {
+            property.ShouldSerialize = _ => shouldSerialize;
+        }
 
         return property;
     }
