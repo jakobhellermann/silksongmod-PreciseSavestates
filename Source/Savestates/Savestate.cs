@@ -260,6 +260,8 @@ public class PlayMakerFsmSnapshot {
     // targets whose path doesn't resolve on load are left as-is — best effort.)
     public Dictionary<string, string?>? GameObjectVariables;
 
+    public Dictionary<string, string?>? ObjectVariables;
+
     // Actions whose OnEnter is re-run on restore (see Restore): their OnEnter establishes live state that lives
     // *outside* the FSM and so can't be snapshotted — a subscription/callback on another object — and that re-running
     // is idempotent (no SendEvent/spawn/... to double). Trigger2dEvent(Layer) register a hero-detection callback on a
@@ -314,6 +316,7 @@ public class PlayMakerFsmSnapshot {
 
         var variables = new Dictionary<string, JToken>();
         var gameObjectVariables = new Dictionary<string, string?>();
+        var objectVariables = new Dictionary<string, string?>();
         foreach (var v in fsm.Variables.GetAllNamedVariables()) {
             if (IsSerializableVariable(v.VariableType)) {
                 object? raw;
@@ -335,6 +338,17 @@ public class PlayMakerFsmSnapshot {
                 }
 
                 gameObjectVariables[v.Name] = target ? ObjectUtils.ObjectPath(target!) : null;
+            } else if (v.VariableType == VariableType.Object) {
+                // FsmObject.Value is always a UnityEngine.Object
+                var obj = v.RawValue as UnityEngine.Object;
+                if (!obj) {
+                    objectVariables[v.Name] = null;
+                } else if (obj is Component comp) {
+                    objectVariables[v.Name] = ObjectUtils.ObjectComponentPath(comp);
+                } else if (!DropWarnSilenced.Contains((fsm.Name, v.Name))) {
+                    Log.Warning($"Not capturing FSM asset variable {ObjectUtils.ObjectPath(fsmComponent.gameObject)}/"
+                                + $"{fsm.Name}.{v.Name} ({obj.GetType().Name})");
+                }
             } else if (!DropWarnSilenced.Contains((fsm.Name, v.Name))) {
                 Log.Warning($"Not capturing FSM variable {ObjectUtils.ObjectPath(fsmComponent.gameObject)}/"
                             + $"{fsm.Name}.{v.Name} ({v.VariableType})");
@@ -363,6 +377,7 @@ public class PlayMakerFsmSnapshot {
             ActiveState = fsm.ActiveStateName,
             Variables = variables,
             GameObjectVariables = gameObjectVariables,
+            ObjectVariables = objectVariables,
             Actions = actions,
         };
     }
@@ -421,6 +436,21 @@ public class PlayMakerFsmSnapshot {
                     }
                 } catch (Exception e) {
                     Log.Warning($"Could not restore FSM GameObject variable {FsmName}.{v.Name}: {e.Message}");
+                }
+            }
+        }
+
+        if (ObjectVariables != null) {
+            foreach (var v in fsm.Variables.GetAllNamedVariables()) {
+                if (v.VariableType != VariableType.Object ||
+                    !ObjectVariables.TryGetValue(v.Name, out var path)) {
+                    continue;
+                }
+
+                if (path == null) {
+                    v.RawValue = null;
+                } else if (ObjectUtils.LookupObjectComponentPath(path) is { } resolved) {
+                    v.RawValue = resolved;
                 }
             }
         }
