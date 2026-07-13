@@ -231,6 +231,7 @@ public static class SnapshotSerializer {
             { typeof(EnemyDeathEffects), ["altCorpses", "deathSounds"] },
             { typeof(EventRelayResponder), ["responses"] },
             { typeof(CallMethodProper), ["parameters"] },
+            { typeof(BattleScene), ["initialisables"] }, // recomputed from scene tree, read-only
         },
     };
 

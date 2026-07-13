@@ -44,6 +44,11 @@ internal static class SerializabilityAnalyzer {
             return false;
         }
 
+        // A non-leaf interface / abstract type can't be reconstructed in a collection
+        if (type.IsInterface || type.IsAbstract) {
+            return true;
+        }
+
         // cycle guard: a type graph can reference itself (A holds List<B>, B holds List<A>).
         if (!visited.Add(type)) {
             return false;
