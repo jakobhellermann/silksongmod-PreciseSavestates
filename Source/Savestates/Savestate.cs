@@ -293,8 +293,16 @@ public class PlayMakerFsmSnapshot {
     private static readonly MethodInfo? EaseSetEasingFunction =
         typeof(EaseFsmAction).GetMethod("SetEasingFunction", BindingFlags.NonPublic | BindingFlags.Instance);
 
-    // variable types whose value can be serialized by value; refs (GameObject/Object/Material/Texture) and
-    // complex containers (Array) are skipped — they're prefab-wired, not runtime state.
+    // Safely ignorable unsave fsm variabels
+    private static readonly HashSet<(string Fsm, string Variable)> DropWarnSilenced = new() {
+        ("Bind", "Bind Voice Clip"),
+        ("Sprint", "Clip"),
+        ("Superjump", "Clip"),
+        ("Silk Specials", "Voice"),
+        ("Tool Attacks", "Get Item"),
+        ("Chest Control", "Hit Sound"),
+    };
+
     private static bool IsSerializableVariable(VariableType type) {
         return type is VariableType.Float or VariableType.Int
             or VariableType.Bool or VariableType.String or VariableType.Vector2 or VariableType.Vector3
@@ -305,38 +313,32 @@ public class PlayMakerFsmSnapshot {
         var fsm = fsmComponent.Fsm;
 
         var variables = new Dictionary<string, JToken>();
-        foreach (var v in fsm.Variables.GetAllNamedVariables()) {
-            if (!IsSerializableVariable(v.VariableType)) {
-                continue;
-            }
-
-            object? raw;
-            try {
-                raw = v.RawValue;
-            } catch (Exception e) {
-                Log.Warning($"Could not read FSM variable {fsm.Name}.{v.Name}: {e.Message}");
-                continue;
-            }
-
-            variables[v.Name] = raw == null ? JValue.CreateNull() : SnapshotSerializer.Snapshot(raw);
-        }
-
-        // GameObject-typed vars: capture the referenced scene object's path (see GameObjectVariables).
         var gameObjectVariables = new Dictionary<string, string?>();
         foreach (var v in fsm.Variables.GetAllNamedVariables()) {
-            if (v.VariableType != VariableType.GameObject) {
-                continue;
-            }
+            if (IsSerializableVariable(v.VariableType)) {
+                object? raw;
+                try {
+                    raw = v.RawValue;
+                } catch (Exception e) {
+                    Log.Warning($"Could not read FSM variable {fsm.Name}.{v.Name}: {e.Message}");
+                    continue;
+                }
 
-            GameObject? target;
-            try {
-                target = v.RawValue as GameObject;
-            } catch (Exception e) {
-                Log.Warning($"Could not read FSM GameObject variable {fsm.Name}.{v.Name}: {e.Message}");
-                continue;
-            }
+                variables[v.Name] = raw == null ? JValue.CreateNull() : SnapshotSerializer.Snapshot(raw);
+            } else if (v.VariableType == VariableType.GameObject) {
+                GameObject? target;
+                try {
+                    target = v.RawValue as GameObject;
+                } catch (Exception e) {
+                    Log.Warning($"Could not read FSM GameObject variable {fsm.Name}.{v.Name}: {e.Message}");
+                    continue;
+                }
 
-            gameObjectVariables[v.Name] = target ? ObjectUtils.ObjectPath(target!) : null;
+                gameObjectVariables[v.Name] = target ? ObjectUtils.ObjectPath(target!) : null;
+            } else if (!DropWarnSilenced.Contains((fsm.Name, v.Name))) {
+                Log.Warning($"Not capturing FSM variable {ObjectUtils.ObjectPath(fsmComponent.gameObject)}/"
+                            + $"{fsm.Name}.{v.Name} ({v.VariableType})");
+            }
         }
 
         // only the active state has actions mid-execution with meaningful runtime state (timers etc.); actions in
