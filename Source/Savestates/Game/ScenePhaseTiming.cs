@@ -3,12 +3,9 @@ using System.Diagnostics;
 using System.Linq;
 using HarmonyLib;
 
-namespace PreciseSavestates.Savestates;
+namespace PreciseSavestates.Savestates.Game;
 
-/// Wall-clock timing of the game's scene-load phases (Fetch/ClearMem/Activation/GarbageCollect). SceneLoad records
-/// these itself, but via Time.realtimeSinceStartup, which DeterministicTimePatch freezes during a TAS load — so its
-/// GetDuration reports 0. This hooks SceneLoad's private Record{Begin,End}Time with an independent Stopwatch (real
-/// wall-clock, not routed through Time.*) so LoadTiming can surface where the transition time actually goes.
+// SceneLoad timings, but timed manually through Stopwatch since TAS reports 0
 internal static class ScenePhaseTiming {
     private static readonly Stopwatch clock = Stopwatch.StartNew();
     private static readonly Dictionary<string, long> begun = new();

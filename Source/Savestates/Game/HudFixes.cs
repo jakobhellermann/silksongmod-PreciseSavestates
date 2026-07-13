@@ -2,17 +2,11 @@ using System;
 using PreciseSavestates.Source;
 using UnityEngine;
 
-namespace PreciseSavestates.Savestates;
+namespace PreciseSavestates.Savestates.Game;
 
-/// After a savestate load the HUD canvas persists (it's DontDestroyOnLoad), so its health_display FSMs keep the
-/// pre-load state and never re-read the restored PlayerData.health — the mask display goes stale. Force each
-/// health_display FSM back through its init path ("Check Max HP"), which snaps the masks to the correct sprite
-/// *silently*: the empty branch just plays the static "Anim Empty" clip, with no break sound and no "DAMAGE TAKEN"
-/// event (unlike firing "HEALTH UPDATE", which routes whole-but-should-be-empty masks through the audible Break?
-/// state). Mirrors DebugMod's HudHelper.RefreshMasks.
+// Refresh HUD canvas after health_display FSM update
 public static class HudFixes {
     public static void RefreshHealthHud() {
-        // A HUD quirk must never abort the load itself — this is a cosmetic fix.
         try {
             RefreshHealthHudInner();
         } catch (Exception e) {
@@ -22,7 +16,7 @@ public static class HudFixes {
 
     private static void RefreshHealthHudInner() {
         var cameras = GameCameras.instance;
-        if (cameras == null || cameras.hudCanvasSlideOut == null) {
+        if (!cameras || !cameras.hudCanvasSlideOut) {
             return;
         }
 
@@ -38,7 +32,7 @@ public static class HudFixes {
             }
         }
 
-        if (health == null) {
+        if (!health) {
             Log.Warning("RefreshHealthHud: no 'Health' object under hudCanvasSlideOut");
             return;
         }
@@ -55,7 +49,7 @@ public static class HudFixes {
             lowHealthFx.SetState("Check Health");
         }
 
-        // Re-initialise each mask's health_display FSM via its clean, silent init path.
+        // Re-initialize each mask's health_display FSM via silent init path.
         foreach (var fsm in health.GetComponentsInChildren<PlayMakerFSM>(true)) {
             if (fsm.FsmName != "health_display") {
                 continue;

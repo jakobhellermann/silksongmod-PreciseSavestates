@@ -18,10 +18,8 @@ public record SavestateInfo(
 }
 
 internal class SavestateStore {
-    private string? backingDir;
-
     private string BackingDir =>
-        backingDir ??= ModDirs.DataDir(PreciseSavestatesPlugin.Instance, "Savestates");
+        field ??= ModDirs.DataDir(PreciseSavestatesPlugin.Instance, "Savestates");
 
     private string LayerDir(string? layer) {
         return Path.Join(BackingDir, layer);
@@ -42,7 +40,7 @@ internal class SavestateStore {
         var infos = Directory.GetFiles(dir, "*.json")
             .Select(path => {
                 var stem = Path.GetFileNameWithoutExtension(path);
-                var (parsedSlot, name) = SplitOnce(stem, '-') ?? (stem, "");
+                var (parsedSlot, name) = stem.SplitOnce('-') ?? (stem, "");
                 int? index = int.TryParse(parsedSlot, out var i) ? i : null;
                 return new SavestateInfo(path, parsedSlot, index, name);
             });
@@ -89,16 +87,5 @@ internal class SavestateStore {
             savestate = null;
             return false;
         }
-    }
-
-    private static (string, string)? SplitOnce(string str, char sep) {
-        var length = str.IndexOf(sep);
-        if (length == -1) {
-            return null;
-        }
-
-        var startIndex = length + 1;
-        var str3 = str.Substring(startIndex, str.Length - startIndex);
-        return (str[..length], str3);
     }
 }

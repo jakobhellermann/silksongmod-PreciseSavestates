@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using BepInEx.Configuration;
 using DevUtils.Toasts;
 using PreciseSavestates.Savestates;
+using PreciseSavestates.Savestates.Game;
 using PreciseSavestates.Source;
 using PreciseSavestates.Utils;
 using UnityEngine;
@@ -46,7 +47,7 @@ public class SavestateModule(
             ToastManager.Toast($"Savestate {name} created");
             return true;
         } catch (Exception e) {
-            ToastManager.Toast($"Failed to create savestate: {e.Message}");
+            ToastManager.Toast($"Failed to create savestate: {e}");
             return false;
         }
     }
@@ -108,7 +109,7 @@ public class SavestateModule(
             Log.Info($"Created savestate file {path}");
             return true;
         } catch (Exception e) {
-            ToastManager.Toast($"Failed to create savestate file: {e.Message}");
+            ToastManager.Toast($"Failed to create savestate file: {e}");
             return false;
         }
     }
