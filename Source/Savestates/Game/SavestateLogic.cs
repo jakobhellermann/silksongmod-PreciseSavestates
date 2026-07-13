@@ -72,7 +72,7 @@ public static class SavestateLogic {
             AddComponent(player.GetComponent<MeshRenderer>(), "player.MeshRenderer");
             gameObjectSnapshots.Add(GameObjectSnapshot.Of(player.gameObject)); // restore layer
             SnapshotSerializer.SnapshotRecursive(player, sceneBehaviours, seen, 0);
-            sceneBehaviours.Add(ComponentSnapshot.Of(player.AnimCtrl));
+            AddComponent(player.AnimCtrl, "player.AnimCtrl");
 
             foreach (var fsm in player.GetComponents<PlayMakerFSM>()) {
                 fsmSnapshots.Add(PlayMakerFsmSnapshot.Of(fsm));
@@ -83,13 +83,13 @@ public static class SavestateLogic {
 
             var cameraCtrl = GameManager.SilentInstance.cameraCtrl;
             if (cameraCtrl) {
-                sceneBehaviours.Add(ComponentSnapshot.Of(cameraCtrl));
+                AddComponent(cameraCtrl, "cameraCtrl");
                 var mainCamera = GameCameras.instance;
-                sceneBehaviours.Add(ComponentSnapshot.Of(mainCamera.transform));
+                AddComponent(mainCamera.transform, "mainCamera.transform");
 
                 if (cameraCtrl.camTarget is { } camTarget) {
-                    sceneBehaviours.Add(ComponentSnapshot.Of(camTarget));
-                    sceneBehaviours.Add(ComponentSnapshot.Of(camTarget.transform));
+                    AddComponent(camTarget, "cameraCtrl.camTarget");
+                    AddComponent(camTarget.transform, "cameraCtrl.camTarget.transform");
                 }
             }
         }
@@ -102,10 +102,10 @@ public static class SavestateLogic {
                         continue;
                     }
 
-                    sceneBehaviours.Add(ComponentSnapshot.Of(hm));
-                    sceneBehaviours.Add(ComponentSnapshot.Of(hm.transform));
-                    var rb = hm.GetComponent<Rigidbody2D>();
-                    if(rb) sceneBehaviours.Add(ComponentSnapshot.Of(rb));
+                    AddComponent(hm, "hm");
+                    AddComponent(hm.transform, "hm.transform");
+                    AddComponent(hm.GetComponent<MeshRenderer>(), "hm.MeshRenderer");
+                    AddComponent(hm.GetComponent<Rigidbody2D>(), "hm.Rigidbody2D");
                 }
             }
 
@@ -134,6 +134,12 @@ public static class SavestateLogic {
                             ActivateGameObjectDelay a => a.gameObject,
                             _ => null,
                         };
+                        if (action is SetMeshRenderer smr) {
+                            var smrTarget = action.Fsm.GetOwnerDefaultTarget(smr.gameObject);
+                            if (smrTarget) {
+                                AddComponent(smrTarget.GetComponent<MeshRenderer>(), "SetMeshRenderer target");
+                            }
+                        }
                         if (ownerDefault == null) {
                             continue;
                         }
@@ -150,11 +156,11 @@ public static class SavestateLogic {
                 }
 
                 foreach (var collider in go.GetComponents<Collider2D>()) {
-                    sceneBehaviours.Add(ComponentSnapshot.Of(collider));
+                    AddComponent(collider, "fsm collider");
                 }
 
                 if (go.GetComponent<tk2dSpriteAnimator>() is { } spriteAnimator) {
-                    sceneBehaviours.Add(ComponentSnapshot.Of(spriteAnimator));
+                    AddComponent(spriteAnimator, "fsm tk2dSpriteAnimator");
                 }
             }
 
@@ -169,7 +175,7 @@ public static class SavestateLogic {
                     continue;
                 }
 
-                sceneBehaviours.Add(ComponentSnapshot.Of(battleScene));
+                AddComponent(battleScene, "battleScene");
             }
         }
 
@@ -211,7 +217,9 @@ public static class SavestateLogic {
                 return;
             }
 
-            sceneBehaviours.Add(ComponentSnapshot.Of(component));
+            if (seen.Add(component)) {
+                sceneBehaviours.Add(ComponentSnapshot.Of(component));
+            }
         }
     }
 
@@ -263,7 +271,7 @@ public static class SavestateLogic {
             throw new Exception($"Can't load savestate in state {gm.GameState}");
         }
 
-        // Cancel in-flight death/respawn/invuln coroutines 
+        // Cancel in-flight death/respawn/invuln coroutines
         LoadCoroutineCleanup.Run();
 
         var sw = Stopwatch.StartNew();
