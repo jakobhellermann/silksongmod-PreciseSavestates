@@ -113,6 +113,10 @@ public static class GameSpecific {
             { typeof(EventRelayResponder), ["responses"] },
             { typeof(CallMethodProper), ["parameters"] },
             { typeof(BattleScene), ["initialisables"] }, // recomputed from scene tree, read-only
+            { typeof(InteractableBase), ["blockers"] }, // live registry , re-registered on scene reload
+            // registry of enabled IRecoilMultiplier components; only registrant is BlackThreadState on OnEnable
+            { typeof(Recoil), ["recoilMultipliers"] },
+            { typeof(BlackThreadState), ["stateReceivers"] }, // rebuilt from scene via GetComponentsInChildren
         },
     };
 }

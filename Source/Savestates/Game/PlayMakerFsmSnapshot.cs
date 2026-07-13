@@ -87,6 +87,9 @@ public class PlayMakerFsmSnapshot {
         ("pilgrim_behaviour", "Audio Table Sing"),
         ("Control", "Route Points"),
         ("Control", "Clip"),
+        // static authored sprite-variant array, only read via ArrayGetRandom for a cosmetic random pick (Sprite Crt);
+        // no Control FSM writes an uncapturable Sprites (Bone_Boulder's Sprites is a FindChild GameObject → captured)
+        ("Control", "Sprites"),
         ("Sway", "Ambient Chain Audio"),
         ("Detect Landing", "Land Audio Table"),
         ("Detect Landing", "Land Audio Table 2"),
