@@ -647,7 +647,10 @@ public static class SavestateLogic {
             }
         }
 
-        UnityEngine.Physics2D.Simulate(0f);
+        var prevSimulationMode = Physics2D.simulationMode;
+        Physics2D.simulationMode = SimulationMode2D.Script;
+        Physics2D.Simulate(0f);
+        Physics2D.simulationMode = prevSimulationMode;
 
         if (savestate.ComponentSnapshots != null) {
             foreach (var mb in savestate.ComponentSnapshots) {
