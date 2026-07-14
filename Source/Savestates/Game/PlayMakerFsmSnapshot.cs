@@ -52,17 +52,9 @@ public class PlayMakerFsmSnapshot {
         // as a handler — a live registration on a dynamically-added component that no serialized field restores (the
         // proxy component doesn't exist on the freshly-loaded object). Base type: covers all ReceivedDamage* subclasses.
         typeof(ReceivedDamageBase),
-        // FaceObjectV2 / GetAngleToTarget2D cache a resolved GameObject in OnEnter (objectA_object / self, from an
-        // FsmOwnerDefault) and dereference it every OnUpdate. Restoring an enemy AI FSM mid-state without re-running
-        // OnEnter leaves that cache null, so their OnUpdate NREs every frame after a savestate load. Both OnEnter are
-        // idempotent (cache + a facing / angle computation, no SendEvent/spawn), so re-running just re-establishes the
-        // cache.
+        // FaceObjectV2: OnEnter caches a raw GameObject (objectA_object) + _sprite, dereferenced every OnUpdate →
+        // restore-without-OnEnter NRE. (self-based AI actions use RestoreSelf; their component caches round-trip as $refs.)
         typeof(FaceObjectV2),
-        typeof(GetAngleToTarget2D),
-        // ChaseObjectGround (enemy ground-chase AI): OnEnter caches the rigidbody / self / animator from an
-        // FsmOwnerDefault, then DoChase() every OnFixedUpdate dereferences them. Same restore-without-OnEnter NRE.
-        // OnEnter is idempotent (cache + a DoChase that only sets chase velocity, which OnFixedUpdate would set anyway).
-        typeof(ChaseObjectGround),
     ];
 
     // EaseFsmAction.OnEnter builds an `ease` *delegate* (via SetEasingFunction) from the serialized easeType — a
@@ -298,6 +290,8 @@ public class PlayMakerFsmSnapshot {
                     easeSetEasingFunction?.Invoke(action, null);
                 }
 
+                RestoreSelf(action);
+
                 // The tk2d animation-event actions whose OnEnter subscribes the animator's AnimationEventTriggered/
                 // AnimationCompleted delegate and caches a private `_sprite` — the exact members RewireTk2dAnimationEvents
                 // re-establishes. Explicit list (not a member-shape probe) so it's clear which actions are handled.
@@ -337,6 +331,18 @@ public class PlayMakerFsmSnapshot {
         }
 
         return true;
+    }
+
+    // 24 actions cache a `FsmGameObject self` with the same pattern
+    private void RestoreSelf(FsmStateAction action) {
+        var type = action.GetType();
+        if (type.GetFieldInfo("self", logFailure: false) is not { } selfField
+            || selfField.FieldType != typeof(FsmGameObject)
+            || type.GetFieldInfo("gameObject", logFailure: false)?.GetValue(action) is not FsmOwnerDefault owner) {
+            return;
+        }
+
+        selfField.SetValue(action, (FsmGameObject)action.Fsm.GetOwnerDefaultTarget(owner));
     }
 
     // tk2d animation-event actions (Play* / Watch* / Wait* families): OnEnter subscribes callbacks onto the animator's
