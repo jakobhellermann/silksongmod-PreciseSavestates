@@ -68,9 +68,7 @@ public static class GameSpecific {
             { typeof(Renderer), ["enabled"] },
             { typeof(Behaviour), ["enabled"] },
         },
-        PropertyConverters = new Dictionary<Type, JsonConverter> {
-            { typeof(tk2dSpriteAnimator), new Tk2dAnimatorConverter() },
-        },
+        PropertyConverters = new Dictionary<Type, JsonConverter>(),
         FieldDenylist = new Dictionary<Type, string[]> {
             {
                 typeof(FsmStateAction),
