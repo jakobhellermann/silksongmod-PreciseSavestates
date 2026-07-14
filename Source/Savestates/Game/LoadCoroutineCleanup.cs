@@ -23,6 +23,8 @@ internal static class LoadCoroutineCleanup {
             if (hero.GetFieldValue<Coroutine>(routine) is { } coro) {
                 hero.StopCoroutine(coro);
             }
+
+            hero.SetFieldValue(routine, null); // iframes don't work when the coroutine is still set
         }
     }
 
