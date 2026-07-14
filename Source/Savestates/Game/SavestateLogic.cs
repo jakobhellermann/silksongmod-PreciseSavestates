@@ -73,6 +73,7 @@ public static class SavestateLogic {
             gameObjectSnapshots.Add(GameObjectSnapshot.Of(player.gameObject)); // restore layer
             SnapshotSerializer.SnapshotRecursive(player, sceneBehaviours, seen, 0);
             AddComponent(player.AnimCtrl, "player.AnimCtrl");
+            AddComponent(player.AnimCtrl?.animator, "player animator");
 
             foreach (var fsm in player.GetComponents<PlayMakerFSM>()) {
                 fsmSnapshots.Add(PlayMakerFsmSnapshot.Of(fsm));

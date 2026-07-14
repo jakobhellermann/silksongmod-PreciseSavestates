@@ -69,7 +69,17 @@ public static class SnapshotSerializer {
     public static void Populate(object target, JToken json) {
         var serializer = JsonSerializer.Create(Settings);
         using JsonReader reader = new JTokenReader(json);
-        serializer.Populate(reader, target);
+
+        // JsonSerializer.Populate runs member converters but not a converter for the root type itself. For a root
+        // snapshot of a converter-backed type (tk2dSpriteAnimator, whose Tk2dAnimatorConverter applies clip + sprite
+        // color), invoke the converter directly with the live target as existingValue.
+        var converter = serializer.Converters.FirstOrDefault(c => c.CanConvert(target.GetType()));
+        if (converter != null) {
+            reader.Read();
+            converter.ReadJson(reader, target.GetType(), target, serializer);
+        } else {
+            serializer.Populate(reader, target);
+        }
     }
 
     private static readonly JsonSerializerSettings Settings = new() {
