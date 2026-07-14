@@ -84,6 +84,7 @@ public static class SavestateLogic {
 
             var cameraCtrl = GameManager.SilentInstance.cameraCtrl;
             if (cameraCtrl) {
+                AddComponent(cameraCtrl.transform, "camera transform");
                 AddComponent(cameraCtrl, "cameraCtrl");
                 var mainCamera = GameCameras.instance;
                 AddComponent(mainCamera.transform, "mainCamera.transform");
