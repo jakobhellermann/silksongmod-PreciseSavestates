@@ -489,6 +489,7 @@ public static class SavestateLogic {
 
         if (!string.IsNullOrEmpty(savestate.Scene)) {
             HudFixes.RefreshHealthHud();
+            HudFixes.RefreshSilkHud();
         }
 
         timing?.Add("apply", applyTotal.ElapsedMilliseconds);

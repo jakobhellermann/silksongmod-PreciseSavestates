@@ -14,6 +14,14 @@ public static class HudFixes {
         }
     }
 
+    public static void RefreshSilkHud() {
+        try {
+            SilkSpool.Instance.RefreshSilk();
+        } catch (Exception e) {
+            Log.Warning($"RefreshSilkHud failed: {e}");
+        }
+    }
+
     private static void RefreshHealthHudInner() {
         var cameras = GameCameras.instance;
         if (!cameras || !cameras.hudCanvasSlideOut) {
