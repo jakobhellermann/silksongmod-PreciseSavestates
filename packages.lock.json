@@ -42,9 +42,9 @@
       },
       "Microsoft.Unity.Analyzers": {
         "type": "Direct",
-        "requested": "[1.26.0, )",
-        "resolved": "1.26.0",
-        "contentHash": "lU4QRpGxzwBGkDJs86Q18CwhiqigssQrItJFr+c1Ijra35Y/uTwV/bRiSIYcXSaWl9RsXCi6dqG4xVAXb9sCtQ=="
+        "requested": "[1.27.0, )",
+        "resolved": "1.27.0",
+        "contentHash": "S8eU12HzdUjN++OBz7F08ft3weYbk5DR1rKKjCvpugqtdGHHC4Om8fJ/jGnJ5QMJY+SzzFHQTyQqfA1neAV+pw=="
       },
       "Silksong.GameLibs": {
         "type": "Direct",
@@ -383,14 +383,6 @@
           "Microsoft.NETCore.Platforms": "1.1.0",
           "Microsoft.NETCore.Targets": "1.1.0",
           "System.Runtime": "4.3.0"
-        }
-      },
-      "devutils": {
-        "type": "Project",
-        "dependencies": {
-          "BepInEx.Core": "[5.4.21, )",
-          "HarmonyX": "[2.9.0, )",
-          "UnityEngine.Modules": "[6000.0.50, )"
         }
       }
     }
