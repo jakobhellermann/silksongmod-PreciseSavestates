@@ -178,14 +178,17 @@ public class CustomizableContractResolver : DefaultContractResolver {
         }
 
         if (!isCollection && isItemRefType) {
-            // Omit prefab components (invalid scene)
+            // Omit refs into prefabs (invalid scene, there's no stable path)
             property.ShouldSerialize = instance => {
                 if (!shouldSerialize) {
                     return false;
                 }
 
-                var value = property.ValueProvider?.GetValue(instance);
-                return value is not Component c || c.gameObject.scene.IsValid();
+                return property.ValueProvider?.GetValue(instance) switch {
+                    Component c => c.gameObject.scene.IsValid(),
+                    GameObject g => g.scene.IsValid(),
+                    _ => true,
+                };
             };
         } else {
             property.ShouldSerialize = _ => shouldSerialize;
@@ -195,7 +198,7 @@ public class CustomizableContractResolver : DefaultContractResolver {
     }
 
     private bool RefType(Type type) {
-        return typeof(Component).IsAssignableFrom(type) && type != typeof(Animator);
+        return (typeof(Component).IsAssignableFrom(type) && type != typeof(Animator)) || type == typeof(GameObject);
     }
 }
 
@@ -207,20 +210,27 @@ internal class RefConverter(int dummy) : JsonConverter {
 
     public static HashSet<Component> References = [];
 
-    private static void WriteReference(JsonWriter writer, object? component) {
-        if (component == null) {
+    private static void WriteReference(JsonWriter writer, object? obj) {
+        if (obj == null) {
             writer.WriteNull();
             return;
         }
 
         writer.WriteStartObject();
         writer.WritePropertyName("$ref");
-        writer.WriteValue(GetRef(component));
+        writer.WriteValue(GetRef(obj));
         writer.WriteEndObject();
     }
 
+    // TODO: switch to standard ComponentPath.cs
+    private static object? ResolvePath(string path) {
+        return ObjectUtils.ComponentTypeName(path) != null
+            ? ObjectUtils.LookupObjectComponentPath(path)
+            : ObjectUtils.LookupPath(path);
+    }
+
     // returns (found: true, null) for explicit null, (found: false, null) for unresolvable ref
-    private static (bool found, Component? value) ReadReference(JsonReader reader) {
+    private static (bool found, object? value) ReadReference(JsonReader reader) {
         if (reader.TokenType == JsonToken.Null) {
             return (true, null);
         }
@@ -245,11 +255,11 @@ internal class RefConverter(int dummy) : JsonConverter {
         while (reader.Read() && reader.TokenType != JsonToken.EndObject) {
         }
 
-        var resolved = ObjectUtils.LookupObjectComponentPath(refPath);
+        var resolved = ResolvePath(refPath);
         return resolved != null ? (true, resolved) : (false, null);
     }
 
-    private static IEnumerable<Component?> ReadReferenceArray(JsonReader reader) {
+    private static IEnumerable<object?> ReadReferenceArray(JsonReader reader) {
         if (reader.TokenType != JsonToken.StartArray) {
             throw new JsonSerializationException($"Expected StartArray token, got {reader.TokenType}");
         }
@@ -274,22 +284,32 @@ internal class RefConverter(int dummy) : JsonConverter {
             return;
         }
 
-        if (value is Component component) {
-            if (!component) {
-                throw new NotImplementedException("!component");
-            }
+        switch (value) {
+            case Component component:
+                if (!component) {
+                    throw new NotImplementedException("!component");
+                }
 
-            References.Add(component);
-            WriteReference(writer, value);
-        } else if (value is IEnumerable list) {
-            writer.WriteStartArray();
-            foreach (var item in list) {
-                WriteReference(writer, item);
-            }
+                References.Add(component);
+                WriteReference(writer, value);
+                break;
+            case GameObject go:
+                if (!go) {
+                    throw new NotImplementedException("!gameObject");
+                }
 
-            writer.WriteEndArray();
-        } else {
-            throw new NotImplementedException($"RefConverter got {value.GetType()}");
+                WriteReference(writer, value);
+                break;
+            case IEnumerable list:
+                writer.WriteStartArray();
+                foreach (var item in list) {
+                    WriteReference(writer, item);
+                }
+
+                writer.WriteEndArray();
+                break;
+            default:
+                throw new NotImplementedException($"RefConverter got {value.GetType()}");
         }
     }
 
@@ -306,8 +326,9 @@ internal class RefConverter(int dummy) : JsonConverter {
         }
 
         if (type.IsArray) {
+            var itemType = type.GetElementType()!;
             var arr = ReadReferenceArray(reader).ToArray();
-            var newArray = Array.CreateInstance(type.GetElementType()!, arr.Length);
+            var newArray = Array.CreateInstance(itemType, arr.Length);
             for (var i = 0; i < arr.Length; i++) {
                 newArray.SetValue(arr[i], i);
             }
@@ -345,7 +366,7 @@ internal class RefConverter(int dummy) : JsonConverter {
             throw new NotImplementedException($"RefConverter called for {type}");
         }
 
-        if (typeof(Component).IsAssignableFrom(type)) {
+        if (type == typeof(GameObject) || typeof(Component).IsAssignableFrom(type)) {
             var (found, value) = ReadReference(reader);
             if (!found) {
                 Log.Warning($"Could not resolve $ref for {type.Name}, keeping existing value");
@@ -364,10 +385,10 @@ internal class RefConverter(int dummy) : JsonConverter {
     }
 
     private static string GetRef(object obj) {
-        if (obj is Component component) {
-            return ObjectUtils.ObjectComponentPath(component);
-        }
-
-        throw new NotImplementedException("GetRef not for component");
+        return obj switch {
+            Component component => ObjectUtils.ObjectComponentPath(component),
+            GameObject go => ObjectUtils.ObjectPath(go),
+            _ => throw new NotImplementedException($"GetRef not supported for {obj.GetType()}"),
+        };
     }
 }

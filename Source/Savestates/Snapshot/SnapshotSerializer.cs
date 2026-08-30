@@ -87,7 +87,7 @@ public static class SnapshotSerializer {
         Error = (_, args) => {
             args.ErrorContext.Handled = true;
             Log.Error(
-                $"Serialization during snapshot: {args.CurrentObject?.GetType()}: {args.ErrorContext.Path}: {args.ErrorContext.Error.Message}");
+                $"Serialization during snapshot: {args.CurrentObject?.GetType()}: {args.ErrorContext.Path}: {args.ErrorContext.Error}");
         },
         ContractResolver = GameSpecific.Resolver,
         Converters = [

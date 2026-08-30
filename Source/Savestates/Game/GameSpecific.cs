@@ -26,7 +26,6 @@ public static class GameSpecific {
             // ignored
             typeof(Camera),
             typeof(Coroutine), // native IntPtr wrapper. TODO: load a dummy coroutine for != null checks?
-            typeof(GameObject),
             typeof(UnityEventBase),
             typeof(Action),
             typeof(Delegate),
