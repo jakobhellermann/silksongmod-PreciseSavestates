@@ -270,6 +270,10 @@ public class SavestateModule(
 
     public void Update() {
         try {
+            if (UiState == SavestateUIState.Off && KeybindManager.IsGameInputBlocked()) {
+                return;
+            }
+
             if (KeybindManager.CheckShortcutOnly(quickSave.Value)) {
                 QuickSave();
             } else if (KeybindManager.CheckShortcutOnly(quickLoad.Value)) {
