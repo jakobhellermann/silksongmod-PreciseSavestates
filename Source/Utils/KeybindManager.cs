@@ -5,6 +5,11 @@ using UnityEngine;
 namespace PreciseSavestates.Utils;
 
 public class KeybindManager {
+    public static bool IsGameInputBlocked() {
+        var hero = HeroController.SilentInstance;
+        return hero && hero.IsInputBlocked();
+    }
+
     /**
      * When you hold A + S + F1 and check KeyboardShortcut(F1).IsPressed, it will return false.
      * With this method, other keys like A and S are not checked, so it would be true.
