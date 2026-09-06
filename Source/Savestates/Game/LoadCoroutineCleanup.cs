@@ -4,6 +4,7 @@ using HarmonyLib;
 using JetBrains.Annotations;
 using PreciseSavestates.Utils;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace PreciseSavestates.Savestates.Game;
 
@@ -26,6 +27,9 @@ internal static class LoadCoroutineCleanup {
 
             hero.SetFieldValue(routine, null); // iframes don't work when the coroutine is still set
         }
+        
+        // HeroController.Die, GameManager.PlayerDead
+        hero.StopAllCoroutines();
     }
 
     private static void ClearDeathVisuals() {
