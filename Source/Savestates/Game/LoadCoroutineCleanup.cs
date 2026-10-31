@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
 using JetBrains.Annotations;
@@ -27,9 +29,27 @@ internal static class LoadCoroutineCleanup {
 
             hero.SetFieldValue(routine, null); // iframes don't work when the coroutine is still set
         }
-        
-        // HeroController.Die, GameManager.PlayerDead
-        hero.StopAllCoroutines();
+
+        foreach (var routine in DeathCoroutines.Running) {
+            hero.StopCoroutine(routine);
+        }
+        DeathCoroutines.Running.Clear();
+    }
+
+    [HarmonyPatch]
+    [PublicAPI]
+    private static class DeathCoroutines {
+        public static readonly List<IEnumerator> Running = [];
+
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(HeroController), "Die")]
+#pragma warning disable HARMONIZE001
+        private static void Die(IEnumerator __result) => Running.Add(__result);
+#pragma warning restore HARMONIZE001
+
+        [HarmonyPostfix]
+        [HarmonyPatch(typeof(GameManager), nameof(GameManager.PlayerDead))]
+        private static void PlayerDead(IEnumerator __result) => Running.Add(__result);
     }
 
     private static void ClearDeathVisuals() {
