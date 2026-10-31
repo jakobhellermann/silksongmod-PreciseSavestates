@@ -98,18 +98,12 @@ public static class SavestateLogic {
         }
 
         if (filter.HasFlag(SavestateFilter.Enemies)) {
-            var activeHealthManagers = typeof(HealthManager).GetFieldValue<List<HealthManager>>("_activeHealthManagers");
-            if (activeHealthManagers != null) {
-                foreach (var hm in activeHealthManagers) {
-                    if (!hm) {
-                        continue;
-                    }
-
-                    AddComponent(hm, "hm");
-                    AddComponent(hm.transform, "hm.transform");
-                    AddComponent(hm.GetComponent<MeshRenderer>(), "hm.MeshRenderer");
-                    AddComponent(hm.GetComponent<Rigidbody2D>(), "hm.Rigidbody2D");
-                }
+            var enemies = SceneEnemies().ToList();
+            foreach (var hm in enemies) {
+                AddComponent(hm, "hm");
+                AddComponent(hm.transform, "hm.transform");
+                AddComponent(hm.GetComponent<MeshRenderer>(), "hm.MeshRenderer");
+                AddComponent(hm.GetComponent<Rigidbody2D>(), "hm.Rigidbody2D");
             }
 
             // FSM-anchored snapshots
@@ -190,6 +184,8 @@ public static class SavestateLogic {
                     battleScene.camLocks, battleScene.activeBeforeBattle, battleScene.activeDuringBattle, battleScene.activeAfterBattle, battleScene.inactiveAfterBattle
                 }.Where(go => go));
             }
+
+            gameObjectTargets.UnionWith(enemies.Select(hm => hm.gameObject));
 
             gameObjectSnapshots.AddRange(gameObjectTargets.Select(GameObjectSnapshot.Of));
         }
@@ -403,6 +399,16 @@ public static class SavestateLogic {
         return scenes;
     }
 
+    private static IEnumerable<HealthManager> SceneEnemies() {
+        for (var i = 0; i < SceneManager.sceneCount; i++) {
+            foreach (var root in SceneManager.GetSceneAt(i).GetRootGameObjects()) {
+                foreach (var hm in root.GetComponentsInChildren<HealthManager>(true)) {
+                    yield return hm;
+                }
+            }
+        }
+    }
+
     // Normally, additive scenes only run on script update through SceneAdditiveLoadConditional.
     // Force them to run synchronously inside the savestate load
     private static async Task PreloadAdditiveScenes(List<string>? wanted) {
@@ -444,6 +450,23 @@ public static class SavestateLogic {
         var applyTotal = Stopwatch.StartNew();
         var sw = Stopwatch.StartNew();
         var containsScene = !string.IsNullOrEmpty(savestate.Scene);
+        
+        if (savestate.GameObjectSnapshots != null) {
+            foreach (var go in savestate.GameObjectSnapshots) {
+                go.Restore();
+            }
+
+            var snapshotPaths = savestate.GameObjectSnapshots.Select(go => go.Path).ToHashSet();
+            foreach (var hm in SceneEnemies()) {
+                var path = ObjectUtils.ObjectPath(hm.gameObject);
+                if (!snapshotPaths.Contains(path)) {
+                    Log.Info($"- Destroying enemy {path}, killed before savestate");
+                    hm.gameObject.SetActive(false);
+                    UnityEngine.Object.Destroy(hm.gameObject);
+                }
+            }
+        }
+
         if (savestate.ComponentSnapshots != null) {
             foreach (var mb in savestate.ComponentSnapshots) {
                 mb.Restore();
@@ -458,13 +481,6 @@ public static class SavestateLogic {
             
             Log.Info($"- Applied snapshots in {sw.ElapsedMilliseconds}ms");
         }
-
-        if (savestate.GameObjectSnapshots != null) {
-            foreach (var go in savestate.GameObjectSnapshots) {
-                go.Restore();
-            }
-        }
-
 
         if (savestate.FsmSnapshots != null) {
             sw.Restart();
