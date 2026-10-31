@@ -220,6 +220,7 @@ public static class SavestateLogic {
             GameFrameCount = Time.frameCount,
             FixedUpdateCycle = CustomPlayerLoop.FixedUpdateCycle,
             HazardRespawn = HazardRespawnSnapshot.Of(PlayerData.instance),
+            Music = filter.HasFlag(SavestateFilter.Scene) ? MusicSnapshot.Of(gm.AudioManager) : null,
             PlayerData = playerData,
             SceneData = sceneData,
         };
@@ -501,6 +502,7 @@ public static class SavestateLogic {
         savestate.HazardRespawn?.Restore();
 
         if (!string.IsNullOrEmpty(savestate.Scene)) {
+            savestate.Music?.RestoreAfterSceneAudio();
             HudFixes.RefreshHealthHud();
             HudFixes.RefreshSilkHud();
         }
