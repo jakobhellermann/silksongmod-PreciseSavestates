@@ -1,16 +1,92 @@
+use clap::{Parser, ValueEnum};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use serde_json::{Map, Value};
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 
+/// Interactively bisect a savestate file to find what breaks loading it.
+///
+/// Rewrites the savestate in place for each step; load it in-game, then answer
+/// g (good), b (broken) or u (undo). The original is restored on exit and on Ctrl+C.
+#[derive(Parser)]
+struct Args {
+    /// Savestate JSON to bisect (edited in place)
+    savestate: String,
+
+    /// Bisect the Data fields of this component (unique Path suffix) instead of which
+    /// snapshots get applied
+    #[arg(conflicts_with_all = ["only", "kinds"])]
+    component: Option<String>,
+
+    /// Apply only snapshots (of --kinds) whose Path contains one of these substrings, once, for a
+    /// manual test
+    #[arg(long, value_delimiter = ',', num_args = 1..)]
+    only: Option<Vec<String>>,
+
+    /// Snapshot kinds to bisect / filter; other kinds are always applied unchanged
+    #[arg(long, value_enum, value_delimiter = ',', num_args = 1..,
+          default_values_t = [Kind::Component, Kind::Gameobject, Kind::Fsm, Kind::Audio])]
+    kinds: Vec<Kind>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum Kind {
+    Component,
+    Gameobject,
+    Fsm,
+    Audio,
+}
+
+impl Kind {
+    fn key(self) -> &'static str {
+        match self {
+            Kind::Component => "ComponentSnapshots",
+            Kind::Gameobject => "GameObjectSnapshots",
+            Kind::Fsm => "FsmSnapshots",
+            Kind::Audio => "AudioTableSnapshots",
+        }
+    }
+
+    fn describe(self, v: &Value) -> String {
+        let s = |k: &str| v[k].as_str().unwrap_or("<none>");
+        match self {
+            Kind::Component => format!("[component] {}", s("Path")),
+            Kind::Gameobject => format!("[gameobject] {}", s("Path")),
+            Kind::Fsm => format!("[fsm] {} ({})", s("Path"), s("FsmName")),
+            Kind::Audio => format!("[audio] {}", s("Name")),
+        }
+    }
+}
+
+type Item = (Kind, Value);
+
+fn collect_items(original: &Value, kinds: &[Kind]) -> Vec<Item> {
+    kinds
+        .iter()
+        .flat_map(|&kind| {
+            original[kind.key()]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(move |v| (kind, v.clone()))
+        })
+        .collect()
+}
+
+// Replaces the arrays of all `kinds` with the items of `subset`; other kinds stay as in `original`.
+fn with_items(original: &Value, kinds: &[Kind], subset: &[Item]) -> Value {
+    let mut modified = original.clone();
+    for &kind in kinds {
+        let items = subset.iter().filter(|(k, _)| *k == kind).map(|(_, v)| v.clone()).collect();
+        modified[kind.key()] = Value::Array(items);
+    }
+    modified
+}
+
 fn main() {
-    let path = std::env::args()
-        .nth(1)
-        .expect("usage: savestate-bisect <savestate.json> [component]");
-    // No component arg -> snapshot mode (which ComponentSnapshots are applied).
-    // Component arg     -> data mode (which Data fields of that component).
-    let component = std::env::args().nth(2);
+    let args = Args::parse();
+    let path = args.savestate;
 
     let original_content = std::fs::read_to_string(&path).expect("failed to read file");
     let original: Value = serde_json::from_str(&original_content).expect("invalid JSON");
@@ -28,60 +104,46 @@ fn main() {
     })
     .expect("failed to set Ctrl+C handler");
 
-    match component.as_deref() {
-        None => bisect_snapshots(&path, &original, &restore_on_ctrlc, &original_content),
-        // Apply only the ComponentSnapshots whose Path contains one of the given substrings, once,
-        // for a manual test. Lets you check an exact hypothesis set (e.g. minimize a backtrack
-        // result: does the trigger group break *without* the context the backtrack happened to keep?).
-        Some("--only") => {
-            let patterns = std::env::args()
-                .nth(3)
-                .expect("usage: savestate-bisect <savestate.json> --only <substr,substr,…>");
-            apply_only(&path, &original, &patterns, &restore_on_ctrlc, &original_content);
+    match (args.component, args.only) {
+        // Lets you check an exact hypothesis set (e.g. minimize a backtrack result: does the
+        // trigger group break *without* the context the backtrack happened to keep?).
+        (_, Some(only)) => {
+            let patterns: Vec<&str> = only.iter().map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+            apply_only(&path, &original, &args.kinds, &patterns, &restore_on_ctrlc, &original_content);
         }
-        Some(component) => bisect_data(&path, &original, component, &restore_on_ctrlc, &original_content),
+        (Some(component), None) => bisect_data(&path, &original, &component, &restore_on_ctrlc, &original_content),
+        (None, None) => bisect_snapshots(&path, &original, &args.kinds, &restore_on_ctrlc, &original_content),
     }
 }
 
 fn apply_only(
     path: &str,
     original: &Value,
-    patterns_csv: &str,
+    kinds: &[Kind],
+    patterns: &[&str],
     restore_on_ctrlc: &Arc<Mutex<Option<(String, String)>>>,
     original_content: &str,
 ) {
-    let patterns: Vec<&str> = patterns_csv
-        .split(',')
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .collect();
+    let all = collect_items(original, kinds);
+    let describe = |(kind, v): &Item| kind.describe(v);
 
-    let all = original["ComponentSnapshots"]
-        .as_array()
-        .expect("no ComponentSnapshots array");
-
-    let kept: Vec<Value> = all
+    let kept: Vec<Item> = all
         .iter()
-        .filter(|s| {
-            let p = s["Path"].as_str().unwrap_or("");
-            patterns.iter().any(|pat| p.contains(pat))
-        })
+        .filter(|item| patterns.iter().any(|pat| describe(item).contains(pat)))
         .cloned()
         .collect();
 
-    println!("Applying only {} of {} ComponentSnapshots:", kept.len(), all.len());
-    for s in &kept {
-        println!("    {}", s["Path"].as_str().unwrap_or("<no Path>"));
+    println!("Applying only {} of {} snapshots:", kept.len(), all.len());
+    for item in &kept {
+        println!("    {}", describe(item));
     }
-    for pat in &patterns {
-        if !all.iter().any(|s| s["Path"].as_str().unwrap_or("").contains(pat)) {
+    for pat in patterns {
+        if !all.iter().any(|item| describe(item).contains(pat)) {
             println!("  ! no snapshot matched '{pat}'");
         }
     }
 
-    let mut modified = original.clone();
-    modified["ComponentSnapshots"] = Value::Array(kept);
-    write_json(path, &modified);
+    write_json(path, &with_items(original, kinds, &kept));
 
     print!("\nWritten. Load and test, then press any key to restore original… ");
     std::io::stdout().flush().unwrap();
@@ -94,35 +156,26 @@ fn apply_only(
     println!("Original savestate restored.");
 }
 
-// Mode 1: bisect which ComponentSnapshots get applied at all, keyed by Path.
+// Mode 1: bisect which snapshots (of the selected kinds) get applied at all.
 fn bisect_snapshots(
     path: &str,
     original: &Value,
+    kinds: &[Kind],
     restore_on_ctrlc: &Arc<Mutex<Option<(String, String)>>>,
     original_content: &str,
 ) {
-    let snapshots: Vec<Value> = original["ComponentSnapshots"]
-        .as_array()
-        .expect("no ComponentSnapshots array")
-        .clone();
+    let items = collect_items(original, kinds);
 
-    println!("Bisecting {} ComponentSnapshots (which get applied)", snapshots.len());
+    let kind_names: Vec<&str> = kinds.iter().map(|k| k.key()).collect();
+    println!("Bisecting {} snapshots ({})", items.len(), kind_names.join(", "));
     println!("g = good, b = broken, u = undo\n");
 
-    let write_subset = |target: &str, subset: &[Value]| {
-        let mut modified = original.clone();
-        modified["ComponentSnapshots"] = Value::Array(subset.to_vec());
-        write_json(target, &modified);
-    };
-    let describe = |s: &Value| {
-        s["Path"]
-            .as_str()
-            .map_or_else(|| "<no Path>".to_string(), str::to_string)
-    };
+    let write_subset = |target: &str, subset: &[Item]| write_json(target, &with_items(original, kinds, subset));
+    let describe = |(kind, v): &Item| kind.describe(v);
 
     run_bisect(
         path,
-        snapshots,
+        items,
         "snapshot",
         &describe,
         &write_subset,
@@ -227,70 +280,116 @@ fn run_bisect<T: Clone>(
     }
     record_broken(&mut smallest_broken, &all, &copy_path, write_subset);
 
-    // undo stack: the candidate list before each split, so `u` can step back one round
-    let mut history: Vec<Vec<T>> = vec![];
-    let mut candidates: Vec<T> = all;
+    write_subset(path, &[]);
+    print!("Baseline (none of the {} {unit}s) written — ok? [g/b]: ", all.len());
+    std::io::stdout().flush().unwrap();
+    match read_ynu() {
+        None => ctrlc_exit(restore_on_ctrlc, original_content, path),
+        Some(Ok(true)) => println!("g"),
+        _ => {
+            println!("b");
+            restore_on_ctrlc.lock().unwrap().take();
+            std::fs::write(path, original_content).expect("failed to restore original");
+            println!("Broken even without any of these {unit}s — the cause is outside the bisected set.");
+            println!("Original savestate restored.");
+            return;
+        }
+    }
 
-    loop {
-        if candidates.len() == 1 {
-            println!(
-                "\nForward bisect converged to {unit}: {} (single-culprit guess — minimize from the saved min-broken savestate to confirm)",
-                describe(&candidates[0])
+    // Minimal culprit set via repeated smallest-broken-prefix search (handles combinations, not just
+    // single culprits). Invariant: `required ∪ pool[..lo]` is good, `required ∪ pool[..hi]` is
+    // broken; then pool[hi-1] is necessary and becomes required. Assumes adding items never fixes it.
+    #[derive(Clone)]
+    struct State<T> {
+        required: Vec<T>,
+        pool: Vec<T>,
+        lo: usize,
+        hi: usize,
+    }
+    let n = all.len();
+    let mut state = State { required: vec![], pool: all, lo: 0, hi: n };
+    let mut history: Vec<State<T>> = vec![];
+
+    let culprits = loop {
+        if state.hi - state.lo > 1 {
+            let mid = (state.lo + state.hi) / 2;
+            let subset: Vec<T> = state.required.iter().chain(&state.pool[..mid]).cloned().collect();
+            write_subset(path, &subset);
+            print!(
+                "[{} found, searching {} candidates] {} required + first {mid} — ok? [g/b/u]: ",
+                state.required.len(),
+                state.hi - state.lo,
+                state.required.len(),
             );
-            break;
-        }
-        if candidates.is_empty() {
-            println!("\nNo culprit found — all {unit}s are safe.");
-            break;
-        }
+            std::io::stdout().flush().unwrap();
 
-        let mid = candidates.len() / 2;
-        write_subset(path, &candidates[..mid]);
-
-        print!(
-            "[{} remaining] kept first {mid} of {} candidates — ok? [g/b/u]: ",
-            candidates.len(),
-            candidates.len(),
-        );
-        std::io::stdout().flush().unwrap();
-
-        let answer = loop {
-            match read_ynu() {
-                None => ctrlc_exit(restore_on_ctrlc, original_content, path),
-                Some(Err(())) => {
-                    if let Some(prev) = history.pop() {
-                        println!("u (undo)");
-                        candidates = prev;
-                        let mid = candidates.len() / 2;
-                        write_subset(path, &candidates[..mid]);
-                        print!(
-                            "[{} remaining] kept first {mid} of {} candidates — ok? [g/b/u]: ",
-                            candidates.len(),
-                            candidates.len(),
-                        );
-                        std::io::stdout().flush().unwrap();
-                    } else {
-                        print!(" (nothing to undo) ");
-                        std::io::stdout().flush().unwrap();
-                    }
-                }
-                Some(Ok(v)) => break v,
+            let Some(answer) = read_answer(&mut history, &mut state, restore_on_ctrlc, original_content, path) else {
+                continue;
+            };
+            if !answer {
+                record_broken(&mut smallest_broken, &subset, &copy_path, write_subset);
             }
-        };
-
-        println!("{}", if answer { 'g' } else { 'b' });
-
-        // the tested subset was candidates[..mid]; a `b` means it reproduces
-        if !answer {
-            record_broken(&mut smallest_broken, &candidates[..mid], &copy_path, write_subset);
+            if answer {
+                state.lo = mid;
+            } else {
+                state.hi = mid;
+            }
+            continue;
         }
 
-        history.push(candidates.clone());
+        let found = state.pool[state.hi - 1].clone();
+        println!("  → required: {}", describe(&found));
+        state.required.push(found);
+        state.pool.truncate(state.hi - 1);
 
-        if answer {
-            candidates = candidates[mid..].to_vec();
-        } else {
-            candidates = candidates[..mid].to_vec();
+        if state.pool.is_empty() {
+            break state.required;
+        }
+
+        write_subset(path, &state.required);
+        print!("Only the {} required {unit}(s) — ok? [g/b/u]: ", state.required.len());
+        std::io::stdout().flush().unwrap();
+        let Some(answer) = read_answer(&mut history, &mut state, restore_on_ctrlc, original_content, path) else {
+            continue;
+        };
+        if !answer {
+            record_broken(&mut smallest_broken, &state.required, &copy_path, write_subset);
+            break state.required;
+        }
+        state.lo = 0;
+        state.hi = state.pool.len();
+    };
+
+    println!("\nMinimal culprit set ({} {unit}(s)):", culprits.len());
+    for c in &culprits {
+        println!("    {}", describe(c));
+    }
+
+    // `u` pops the previous state and returns None so the caller re-runs that step
+    fn read_answer<T: Clone>(
+        history: &mut Vec<State<T>>,
+        state: &mut State<T>,
+        restore_on_ctrlc: &Arc<Mutex<Option<(String, String)>>>,
+        original_content: &str,
+        path: &str,
+    ) -> Option<bool> {
+        match read_ynu() {
+            None => ctrlc_exit(restore_on_ctrlc, original_content, path),
+            Some(Err(())) => {
+                match history.pop() {
+                    Some(prev) => {
+                        println!("u (undo)");
+                        *state = prev;
+                    }
+                    None => println!("u (nothing to undo)"),
+                }
+                None
+            }
+            Some(Ok(answer)) => {
+                println!("{}", if answer { 'g' } else { 'b' });
+                history.push(state.clone());
+                Some(answer)
+            }
         }
     }
 
