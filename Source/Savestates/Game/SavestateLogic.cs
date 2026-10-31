@@ -98,7 +98,7 @@ public static class SavestateLogic {
         }
 
         if (filter.HasFlag(SavestateFilter.Enemies)) {
-            var enemies = SceneEnemies().ToList();
+            var enemies = SceneComponents<HealthManager>().ToList();
             foreach (var hm in enemies) {
                 AddComponent(hm, "hm");
                 AddComponent(hm.transform, "hm.transform");
@@ -172,6 +172,13 @@ public static class SavestateLogic {
             }
 
             // extra component snapshots
+            foreach (var breakable in SceneComponents<Breakable>().Where(b => b.IsBroken)) {
+                AddComponent(breakable, "breakable");
+                AddComponent(breakable.GetComponent<Collider2D>(), "breakable collider");
+                gameObjectTargets.UnionWith(breakable.GetFieldValue<GameObject[]>("wholeParts")!.Where(go => go));
+                gameObjectTargets.UnionWith(breakable.GetFieldValue<GameObject[]>("remnantParts")!.Where(go => go));
+            }
+
             foreach (var battleScene in UnityEngine.Object.FindObjectsByType<BattleScene>(FindObjectsInactive.Include,
                          FindObjectsSortMode.None)) {
                 if (!battleScene) {
@@ -399,11 +406,11 @@ public static class SavestateLogic {
         return scenes;
     }
 
-    private static IEnumerable<HealthManager> SceneEnemies() {
+    private static IEnumerable<T> SceneComponents<T>() where T : Component {
         for (var i = 0; i < SceneManager.sceneCount; i++) {
             foreach (var root in SceneManager.GetSceneAt(i).GetRootGameObjects()) {
-                foreach (var hm in root.GetComponentsInChildren<HealthManager>(true)) {
-                    yield return hm;
+                foreach (var component in root.GetComponentsInChildren<T>(true)) {
+                    yield return component;
                 }
             }
         }
@@ -457,7 +464,7 @@ public static class SavestateLogic {
             }
 
             var snapshotPaths = savestate.GameObjectSnapshots.Select(go => go.Path).ToHashSet();
-            foreach (var hm in SceneEnemies()) {
+            foreach (var hm in SceneComponents<HealthManager>()) {
                 var path = ObjectUtils.ObjectPath(hm.gameObject);
                 if (!snapshotPaths.Contains(path)) {
                     Log.Info($"- Destroying enemy {path}, killed before savestate");
