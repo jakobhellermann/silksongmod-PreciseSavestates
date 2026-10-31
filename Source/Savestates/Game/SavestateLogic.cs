@@ -166,10 +166,6 @@ public static class SavestateLogic {
                 }
             }
 
-            foreach (var target in gameObjectTargets) {
-                gameObjectSnapshots.Add(GameObjectSnapshot.Of(target));
-            }
-
             // extra component snapshots
             foreach (var battleScene in UnityEngine.Object.FindObjectsByType<BattleScene>(FindObjectsInactive.Include,
                          FindObjectsSortMode.None)) {
@@ -178,7 +174,13 @@ public static class SavestateLogic {
                 }
 
                 AddComponent(battleScene, "battleScene");
+                // toggled from C#
+                gameObjectTargets.UnionWith(new[] {
+                    battleScene.camLocks, battleScene.activeBeforeBattle, battleScene.activeDuringBattle, battleScene.activeAfterBattle, battleScene.inactiveAfterBattle
+                }.Where(go => go));
             }
+
+            gameObjectSnapshots.AddRange(gameObjectTargets.Select(GameObjectSnapshot.Of));
         }
 
         JToken? playerData = null;

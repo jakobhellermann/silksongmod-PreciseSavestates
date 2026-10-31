@@ -243,7 +243,7 @@ public static class ReflectionExtension {
 
         var currentType = type;
         while (currentType != null && currentType.IsSubclassOf(typeof(object))) {
-            allFields.AddRange(currentType.GetFields(bindingFlags));
+            allFields.UnionWith(currentType.GetFields(bindingFlags));
 
             currentType = currentType.BaseType;
         }
@@ -265,7 +265,7 @@ public static class ReflectionExtension {
 
         var currentType = type;
         while (currentType != null && currentType.IsSubclassOf(typeof(object))) {
-            allProperties.AddRange(currentType.GetProperties(bindingFlags));
+            allProperties.UnionWith(currentType.GetProperties(bindingFlags));
 
             currentType = currentType.BaseType;
         }
@@ -287,7 +287,7 @@ public static class ReflectionExtension {
 
         var currentType = type;
         while (currentType != null && currentType.IsSubclassOf(typeof(object))) {
-            allMethods.AddRange(currentType.GetMethods(bindingFlags));
+            allMethods.UnionWith(currentType.GetMethods(bindingFlags));
 
             currentType = currentType.BaseType;
         }
