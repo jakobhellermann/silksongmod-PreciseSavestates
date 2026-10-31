@@ -4,6 +4,7 @@ using System.Reflection;
 using HutongGames.PlayMaker;
 using HutongGames.PlayMaker.Actions;
 using Newtonsoft.Json;
+using TeamCherry.NestedFadeGroup;
 using TMProOld;
 using UnityEngine;
 using UnityEngine.Animations;
@@ -66,6 +67,9 @@ public static class GameSpecific {
             { typeof(MeshRenderer), [] },
             { typeof(Renderer), ["enabled"] },
             { typeof(Behaviour), ["enabled"] },
+            // not previousAlpha, so OnLateUpdate notices the changed alpha and applies it
+            { typeof(NestedFadeGroupBase), ["alpha"] },
+            { typeof(NestedFadeGroup), [] },
         },
         PropertyConverters = new Dictionary<Type, JsonConverter>(),
         FieldDenylist = new Dictionary<Type, string[]> {

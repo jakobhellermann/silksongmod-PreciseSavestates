@@ -13,6 +13,7 @@ using PreciseSavestates.Savestates.Snapshot;
 using PreciseSavestates.Source;
 using PreciseSavestates.Source.Savestates.Snapshot;
 using PreciseSavestates.Utils;
+using TeamCherry.NestedFadeGroup;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.SceneManagement;
@@ -140,6 +141,16 @@ public static class SavestateLogic {
                             var smrTarget = action.Fsm.GetOwnerDefaultTarget(smr.gameObject);
                             if (smrTarget) {
                                 AddComponent(smrTarget.GetComponent<MeshRenderer>(), "SetMeshRenderer target");
+                            }
+                        }
+                        if (action is FadeNestedFadeGroup fade) {
+                            var fadeTarget = action.Fsm.GetOwnerDefaultTarget(fade.Target);
+                            if (fadeTarget) {
+                                NestedFadeGroupBase fadeGroup = fadeTarget.GetComponent<NestedFadeGroup>();
+                                if (!fadeGroup) {
+                                    fadeGroup = fadeTarget.GetComponent<NestedFadeGroupBase>();
+                                }
+                                AddComponent(fadeGroup, "FadeNestedFadeGroup target");
                             }
                         }
                         if (ownerDefault == null) {
