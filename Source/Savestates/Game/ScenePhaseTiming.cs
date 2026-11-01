@@ -29,15 +29,13 @@ internal static class ScenePhaseTiming {
     }
 
     [HarmonyPatch]
-#pragma warning disable HARMONIZE001
     private static class Patch {
         [HarmonyPostfix]
-        [HarmonyPatch(typeof(SceneLoad), "RecordBeginTime", typeof(SceneLoad.Phases))]
+        [HarmonyPatch(typeof(SceneLoad), nameof(SceneLoad.RecordBeginTime), typeof(SceneLoad.Phases))]
         private static void RecordBeginTime(SceneLoad.Phases phase) => Begin(phase.ToString());
 
         [HarmonyPostfix]
-        [HarmonyPatch(typeof(SceneLoad), "RecordEndTime", typeof(SceneLoad.Phases))]
+        [HarmonyPatch(typeof(SceneLoad), nameof(SceneLoad.RecordEndTime), typeof(SceneLoad.Phases))]
         private static void RecordEndTime(SceneLoad.Phases phase) => End(phase.ToString());
     }
-#pragma warning restore HARMONIZE001
 }

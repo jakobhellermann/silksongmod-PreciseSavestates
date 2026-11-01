@@ -6,7 +6,6 @@ using System.Reflection;
 using System.Threading.Tasks;
 using HarmonyLib;
 using JetBrains.Annotations;
-using PreciseSavestates.Utils;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -39,13 +38,15 @@ internal static class LoadCoroutineCleanup {
             return;
         }
 
-        foreach (var routine in new[] { "hazardRespawnRoutine", "hazardInvulnRoutine" }) {
-            if (hero.GetFieldValue<Coroutine>(routine) is { } coro) {
-                hero.StopCoroutine(coro);
+        foreach (var routine in new[] { hero.hazardRespawnRoutine, hero.hazardInvulnRoutine }) {
+            if (routine != null) {
+                hero.StopCoroutine(routine);
             }
-
-            hero.SetFieldValue(routine, null); // iframes don't work when the coroutine is still set
         }
+
+        // iframes don't work when the coroutine is still set
+        hero.hazardRespawnRoutine = null;
+        hero.hazardInvulnRoutine = null;
 
         foreach (var routine in DeathCoroutines.Running) {
             hero.StopCoroutine(routine);
@@ -59,10 +60,8 @@ internal static class LoadCoroutineCleanup {
         public static readonly List<IEnumerator> Running = [];
 
         [HarmonyPostfix]
-        [HarmonyPatch(typeof(HeroController), "Die")]
-#pragma warning disable HARMONIZE001
+        [HarmonyPatch(typeof(HeroController), nameof(HeroController.Die))]
         private static void Die(IEnumerator __result) => Running.Add(__result);
-#pragma warning restore HARMONIZE001
 
         [HarmonyPostfix]
         [HarmonyPatch(typeof(GameManager), nameof(GameManager.PlayerDead))]
@@ -72,7 +71,7 @@ internal static class LoadCoroutineCleanup {
     private static void ClearDeathVisuals() {
         var hero = HeroController.UnsafeInstance;
         if (hero) {
-            var invPulse = hero.GetFieldValue<InvulnerablePulse>("invPulse");
+            var invPulse = hero.invPulse;
             if (invPulse) {
                 invPulse.StopInvulnerablePulse();
             }
@@ -82,29 +81,23 @@ internal static class LoadCoroutineCleanup {
             }
         }
 
-        var vignette = typeof(StatusVignette).GetFieldValue<StatusVignette>("_instance");
+        var vignette = StatusVignette._instance;
         if (vignette) {
-            foreach (var field in new[] { "fadeRoutines", "tempFadeRoutines" }) {
-                if (vignette.GetFieldValue<Coroutine?[]>(field) is { } routines) {
-                    foreach (var routine in routines) {
-                        if (routine != null) {
-                            vignette.StopCoroutine(routine);
-                        }
+            foreach (var routines in new[] { vignette.fadeRoutines, vignette.tempFadeRoutines }) {
+                foreach (var routine in routines) {
+                    if (routine != null) {
+                        vignette.StopCoroutine(routine);
                     }
                 }
             }
 
-            if (vignette.GetFieldValue<Animator[]>("vignettes") is { } vignettes) {
-                foreach (var animator in vignettes) {
-                    if (animator) {
-                        animator.gameObject.SetActive(false);
-                    }
+            foreach (var animator in vignette.vignettes) {
+                if (animator) {
+                    animator.gameObject.SetActive(false);
                 }
             }
 
-            if (vignette.GetFieldValue<Array>("mixTValues") is { } mixTValues) {
-                Array.Clear(mixTValues, 0, mixTValues.Length);
-            }
+            Array.Clear(vignette.mixTValues, 0, vignette.mixTValues.Length);
         }
 
         // death slides the HUD out
@@ -117,8 +110,8 @@ internal static class LoadCoroutineCleanup {
             gm.screenFader_fsm.SendEventSafe("SCENE FADE IN");
         }
 
-        if (gm.cameraCtrl && gm.cameraCtrl.GetFieldValue<PlayMakerFSM>("fadeFSM") is { } fadeFsm) {
-            fadeFsm.SendEventSafe("FADE SCENE IN");
+        if (gm.cameraCtrl && gm.cameraCtrl.fadeFSM) {
+            gm.cameraCtrl.fadeFSM.SendEventSafe("FADE SCENE IN");
         }
     }
 

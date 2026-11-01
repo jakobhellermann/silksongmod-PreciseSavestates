@@ -2,7 +2,6 @@ using System;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using PreciseSavestates.Source;
-using PreciseSavestates.Utils;
 using UnityEngine;
 
 namespace PreciseSavestates.Savestates.Game;
@@ -26,7 +25,7 @@ public class Tk2dAnimatorConverter : JsonConverter {
         // tk2d advances clipTime by deltaTime*clipFps and derives the frame as (int)clipTime,
         // so clipTime is fps-independent playback position.
         writer.WritePropertyName("clipTime");
-        writer.WriteValue(animator.GetFieldValue<float>("clipTime"));
+        writer.WriteValue(animator.clipTime);
         writer.WritePropertyName("fps");
         writer.WriteValue(animator.ClipFps);
         writer.WritePropertyName("playing");
@@ -79,7 +78,7 @@ public class Tk2dAnimatorConverter : JsonConverter {
             animator.ClipFps = fps;
         }
 
-        animator.SetFieldValue("clipTime", clipTime);
+        animator.clipTime = clipTime;
 
         // Refresh visible sprite without emitting events
         if (animator.CurrentClip is { frames.Length: > 0 } cc) {

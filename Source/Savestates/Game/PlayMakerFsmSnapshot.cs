@@ -57,13 +57,6 @@ public class PlayMakerFsmSnapshot {
         typeof(FaceObjectV2),
     ];
 
-    // EaseFsmAction.OnEnter builds an `ease` *delegate* (via SetEasingFunction) from the serialized easeType — a
-    // non-serializable derived value. When we resume an active Ease action's OnUpdate (see the ActiveActions rebuild
-    // in Restore) without having run OnEnter, `ease` is null and OnUpdate NREs invoking it. Rebuild it directly; it's
-    // a pure function of easeType with no side effects and doesn't touch the eased progress (which is serialized).
-    private static readonly MethodInfo? easeSetEasingFunction =
-        typeof(EaseFsmAction).GetMethod("SetEasingFunction", BindingFlags.NonPublic | BindingFlags.Instance);
-
     // Safely ignorable unsave fsm variables
     private static readonly HashSet<(string Fsm, string Variable)> dropWarnSilenced = [
         ("Bind", "Bind Voice Clip"),
@@ -262,9 +255,9 @@ public class PlayMakerFsmSnapshot {
             return true;
         }
 
-        fsm.SetFieldValue("activeState", targetState);
-        fsm.SetFieldValue("activeStateName", ActiveState);
-        fsm.SetFieldValue("activeStateEntered", true);
+        fsm.activeState = targetState;
+        fsm.activeStateName = ActiveState;
+        fsm.activeStateEntered = true;
 
         // OnEnter also builds the state's ActiveActions list (via ActivateActions) — the list FsmState.OnUpdate
         // iterates to run per-frame actions. Skipping OnEnter leaves it empty, so a restored state runs NO OnUpdate:
@@ -286,8 +279,8 @@ public class PlayMakerFsmSnapshot {
 
                 // Reconstruct OnEnter-computed, non-serializable state the action's OnUpdate needs. Ease actions
                 // rebuild their `ease` delegate from easeType (else OnUpdate NREs on the null delegate).
-                if (action is EaseFsmAction) {
-                    easeSetEasingFunction?.Invoke(action, null);
+                if (action is EaseFsmAction ease) {
+                    ease.SetEasingFunction();
                 }
                 // OnEnter caches the moved transform (a Component, not captured); rerunning it would restart the move
                 if (action is AnimatePositionBy animatePositionBy) {

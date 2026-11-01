@@ -44,10 +44,8 @@ public static class SavestateLogic {
     [HarmonyPatch]
     private class Patches {
         [HarmonyPostfix]
-        [HarmonyPatch(typeof(HeroController), "FinishedEnteringScene")]
-#pragma warning disable HARMONIZE001
+        [HarmonyPatch(typeof(HeroController), nameof(HeroController.FinishedEnteringScene))]
         private static void FinishedEnteringScene() {
-#pragma warning restore HARMONIZE001
             sceneLoadedSource?.TrySetResult(true);
         }
     }
@@ -69,7 +67,7 @@ public static class SavestateLogic {
 
         if (filter.HasFlag(SavestateFilter.Player)) {
             AddComponent(player.transform, "player.transform");
-            AddComponent(player.GetFieldValue<Rigidbody2D>("rb2d"), "player.rb2d");
+            AddComponent(player.rb2d, "player.rb2d");
             AddComponent(player.GetComponent<MeshRenderer>(), "player.MeshRenderer");
             gameObjectSnapshots.Add(GameObjectSnapshot.Of(player.gameObject)); // restore layer
             SnapshotSerializer.SnapshotRecursive(player, sceneBehaviours, seen, 0);
@@ -180,8 +178,8 @@ public static class SavestateLogic {
             foreach (var breakable in SceneComponents<Breakable>().Where(b => b.IsBroken)) {
                 AddComponent(breakable, "breakable");
                 AddComponent(breakable.GetComponent<Collider2D>(), "breakable collider");
-                gameObjectTargets.UnionWith(breakable.GetFieldValue<GameObject[]>("wholeParts")!.Where(go => go));
-                gameObjectTargets.UnionWith(breakable.GetFieldValue<GameObject[]>("remnantParts")!.Where(go => go));
+                gameObjectTargets.UnionWith(breakable.wholeParts.Where(go => go));
+                gameObjectTargets.UnionWith(breakable.remnantParts.Where(go => go));
             }
 
             foreach (var battleScene in UnityEngine.Object.FindObjectsByType<BattleScene>(FindObjectsInactive.Include,
@@ -544,11 +542,19 @@ public static class SavestateLogic {
         }
 
         if (savestate.FixedUpdateCycle is { } fixedUpdateCycle) {
-            typeof(CustomPlayerLoop).SetPropertyValue("FixedUpdateCycle", fixedUpdateCycle);
+            CustomPlayerLoop.FixedUpdateCycle = fixedUpdateCycle;
         }
 
         // must run after scene entry
         savestate.HazardRespawn?.Restore();
+
+        // saved during the first wave's start delay, whose StartWave coroutine is lost
+        foreach (var battleScene in SceneComponents<BattleScene>()) {
+            if (battleScene.started && !battleScene.completed && battleScene.currentWave == 0 && battleScene.currentEnemies == 0) {
+                Log.Info($"- Restarting first wave of {ObjectUtils.ObjectPath(battleScene.gameObject)}");
+                battleScene.StartCoroutine(battleScene.StartWave(0));
+            }
+        }
 
         if (!string.IsNullOrEmpty(savestate.Scene)) {
             savestate.Music?.RestoreAfterSceneAudio();

@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using HarmonyLib;
-using PreciseSavestates.Utils;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using UnityEngine.ResourceManagement.ResourceProviders;
 using UnityEngine.SceneManagement;
@@ -14,12 +13,11 @@ namespace PreciseSavestates.Savestates.Game;
 [HarmonyPatch]
 internal static class SceneAdditiveLoadConditionalPatch {
     [HarmonyPrefix]
-    [HarmonyPatch(typeof(SceneAdditiveLoadConditional), "Unload",
+    [HarmonyPatch(typeof(SceneAdditiveLoadConditional), nameof(SceneAdditiveLoadConditional.Unload),
         typeof(Scene), typeof(List<AsyncOperationHandle<SceneInstance>>))]
 #pragma warning disable HARMONIZE003
     private static void PruneDestroyedLoaders() {
 #pragma warning restore HARMONIZE003
-        var loads = typeof(SceneAdditiveLoadConditional).GetFieldValue<List<SceneAdditiveLoadConditional>>("_additiveSceneLoads");
-        loads?.RemoveAll(loader => loader == null);
+        SceneAdditiveLoadConditional._additiveSceneLoads.RemoveAll(loader => loader == null);
     }
 }

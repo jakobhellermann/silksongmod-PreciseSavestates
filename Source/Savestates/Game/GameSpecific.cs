@@ -62,13 +62,13 @@ public static class GameSpecific {
         ],
         ExactFieldTypesToIgnore = [typeof(Component)],
         FieldAllowlist = new Dictionary<Type, string[]> {
-            { typeof(Transform), ["localPosition", "localRotation", "localScale"] },
-            { typeof(Rigidbody2D), ["position", "linearVelocity", "gravityScale", "bodyType"] },
+            { typeof(Transform), [nameof(Transform.localPosition), nameof(Transform.localRotation), nameof(Transform.localScale)] },
+            { typeof(Rigidbody2D), [nameof(Rigidbody2D.position), nameof(Rigidbody2D.linearVelocity), nameof(Rigidbody2D.gravityScale), nameof(Rigidbody2D.bodyType)] },
             { typeof(MeshRenderer), [] },
-            { typeof(Renderer), ["enabled"] },
-            { typeof(Behaviour), ["enabled"] },
+            { typeof(Renderer), [nameof(Renderer.enabled)] },
+            { typeof(Behaviour), [nameof(Behaviour.enabled)] },
             // not previousAlpha, so OnLateUpdate notices the changed alpha and applies it
-            { typeof(NestedFadeGroupBase), ["alpha"] },
+            { typeof(NestedFadeGroupBase), [nameof(NestedFadeGroupBase.alpha)] },
             { typeof(NestedFadeGroup), [] },
         },
         PropertyConverters = new Dictionary<Type, JsonConverter>(),
@@ -85,39 +85,39 @@ public static class GameSpecific {
             },
             { typeof(HeroController), [
                 // restored separately
-                "playerData",
+                nameof(HeroController.playerData),
                 // unserializable collections, static
-                "configs", "specialConfigs"]
+                nameof(HeroController.configs), nameof(HeroController.specialConfigs)]
             },
-            { typeof(CameraController), ["instantLockedArea"] }, // transient? TODO
+            { typeof(CameraController), [nameof(CameraController.instantLockedArea)] }, // transient? TODO
             // CallStaticMethod caches its resolved MethodInfo/Type/ParameterInfo (unresolvable) keyed on cachedClassName/cachedMethodName
             // Skipping it recomputes the cache.
-            { typeof(CallStaticMethod), ["cachedClassName", "cachedMethodName", "parameters"] },
+            { typeof(CallStaticMethod), [nameof(CallStaticMethod.cachedClassName), nameof(CallStaticMethod.cachedMethodName), nameof(CallStaticMethod.parameters)] },
             // --- explicit denylisted "skip unserializable type" warnings ---
-            { typeof(RunEffects), ["runTypes"] },
-            { typeof(InputHandler), ["MappableControllerActions", "MappableKeyboardActions"] },
-            { typeof(HeroVibrationController), ["audioClipVibrations", "emissions"] },
-            { typeof(SpriteFlash), ["repeatingFlashes"] },
-            { typeof(GameManager), ["skippables"] },
+            { typeof(RunEffects), [nameof(RunEffects.runTypes)] },
+            { typeof(InputHandler), [nameof(InputHandler.MappableControllerActions), nameof(InputHandler.MappableKeyboardActions)] },
+            { typeof(HeroVibrationController), [nameof(HeroVibrationController.audioClipVibrations), nameof(HeroVibrationController.emissions)] },
+            { typeof(SpriteFlash), [nameof(SpriteFlash.repeatingFlashes)] },
+            { typeof(GameManager), [nameof(GameManager.skippables)] },
             {
                 typeof(DamageEnemies),
                 [
                     // static config
-                    "spikeSlashReactions",
+                    nameof(DamageEnemies.spikeSlashReactions),
                     // scratch
-                    "hitsResponded", "tempHitsResponded", "damagePrevented", "currentDamageBuffer", "processingDamageBuffer"
+                    nameof(DamageEnemies.hitsResponded), nameof(DamageEnemies.tempHitsResponded), nameof(DamageEnemies.damagePrevented), nameof(DamageEnemies.currentDamageBuffer), nameof(DamageEnemies.processingDamageBuffer)
                 ]
             },
-            { typeof(tk2dTileMap), ["layers", "tilePrefabsList"] },
-            { typeof(HealthManager), ["itemDropGroups", "_itemDrops"] },
-            { typeof(EnemyDeathEffects), ["altCorpses", "deathSounds"] },
-            { typeof(EventRelayResponder), ["responses"] },
-            { typeof(CallMethodProper), ["parameters"] },
-            { typeof(BattleScene), ["initialisables"] }, // recomputed from scene tree, read-only
-            { typeof(InteractableBase), ["blockers"] }, // live registry , re-registered on scene reload
+            { typeof(tk2dTileMap), [nameof(tk2dTileMap.layers), nameof(tk2dTileMap.tilePrefabsList)] },
+            { typeof(HealthManager), [nameof(HealthManager.itemDropGroups), nameof(HealthManager._itemDrops)] },
+            { typeof(EnemyDeathEffects), [nameof(EnemyDeathEffects.altCorpses), "deathSounds"] },
+            { typeof(EventRelayResponder), [nameof(EventRelayResponder.responses)] },
+            { typeof(CallMethodProper), [nameof(CallMethodProper.parameters)] },
+            { typeof(BattleScene), [nameof(BattleScene.initialisables)] }, // recomputed from scene tree, read-only
+            { typeof(InteractableBase), [nameof(InteractableBase.blockers)] }, // live registry , re-registered on scene reload
             // registry of enabled IRecoilMultiplier components; only registrant is BlackThreadState on OnEnable
-            { typeof(Recoil), ["recoilMultipliers"] },
-            { typeof(BlackThreadState), ["stateReceivers"] }, // rebuilt from scene via GetComponentsInChildren
+            { typeof(Recoil), [nameof(Recoil.recoilMultipliers)] },
+            { typeof(BlackThreadState), [nameof(BlackThreadState.stateReceivers)] }, // rebuilt from scene via GetComponentsInChildren
         },
     };
 }

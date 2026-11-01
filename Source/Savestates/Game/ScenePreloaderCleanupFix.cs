@@ -11,7 +11,7 @@ internal static class ScenePreloaderCleanupFix {
     [HarmonyPrefix]
     [HarmonyPatch(typeof(ScenePreloader), nameof(ScenePreloader.Cleanup))]
     private static bool Cleanup() {
-        var ops = typeof(ScenePreloader).GetFieldValue<List<ScenePreloader.SceneLoadOp>>("_forceEndedOperations");
+        var ops = ScenePreloader._forceEndedOperations;
         if (ops == null) {
             return false;
         }
