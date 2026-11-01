@@ -1,7 +1,9 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using HarmonyLib;
 using JetBrains.Annotations;
 using PreciseSavestates.Utils;
@@ -13,7 +15,22 @@ namespace PreciseSavestates.Savestates.Game;
 internal static class LoadCoroutineCleanup {
     public static void Run() {
         StopHeroDeathCoroutines();
+        StopPendingScenePreloads();
         ClearDeathVisuals();
+    }
+
+    // Unity activates scene loads in queue order and SceneLoad activates preloads first, so one queued after ours deadlocks
+    public static async Task WaitForPendingScenePreloads() {
+        while (ScenePreloader.GetOperations().Any(op => !op.Operation.IsDone)) {
+            await Task.Yield();
+        }
+    }
+
+    // A started preload issues its load a frame later, i.e. after ours (deadlock, see above); LoadRoutine is its only coroutine
+    private static void StopPendingScenePreloads() {
+        foreach (var preloader in Object.FindObjectsByType<ScenePreloader>(FindObjectsSortMode.None)) {
+            preloader.StopAllCoroutines();
+        }
     }
 
     private static void StopHeroDeathCoroutines() {

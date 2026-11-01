@@ -283,18 +283,31 @@ public static class SavestateLogic {
         }
     }
 
+    /// Before a scene transition: no pending scene preload (see LoadCoroutineCleanup), PLAYING, no in-flight death.
+    public static async Task PrepareSceneLoad() {
+        await LoadCoroutineCleanup.WaitForPendingScenePreloads();
+        var state = GameManager.instance.GameState;
+        if (state != GameState.PLAYING) {
+            throw new Exception($"Can't load in state {state}");
+        }
+        LoadCoroutineCleanup.Run();
+    }
+
     private static async Task LoadInner(Savestate savestate, SavestateLoadMode loadMode) {
         var silent = string.IsNullOrEmpty(savestate.Scene);
         Log.Info($"Loading savestate... (scene='{savestate.Scene}', mode={loadMode})");
 
         var timing = new LoadTiming();
         var gm = GameManager.instance;
-        if (gm.GameState != GameState.PLAYING) {
-            throw new Exception($"Can't load savestate in state {gm.GameState}");
+        if (!string.IsNullOrEmpty(savestate.Scene)) {
+            await PrepareSceneLoad();
+        } else {
+            // An in-place apply has no transition to race a preload, so it stays synchronous
+            if (gm.GameState != GameState.PLAYING) {
+                throw new Exception($"Can't load savestate in state {gm.GameState}");
+            }
+            LoadCoroutineCleanup.Run();
         }
-
-        // Cancel in-flight death/respawn/invuln coroutines
-        LoadCoroutineCleanup.Run();
 
         var sw = Stopwatch.StartNew();
         if (!string.IsNullOrEmpty(savestate.Scene)) {
