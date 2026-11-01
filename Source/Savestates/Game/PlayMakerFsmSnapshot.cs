@@ -289,6 +289,11 @@ public class PlayMakerFsmSnapshot {
                 if (action is EaseFsmAction) {
                     easeSetEasingFunction?.Invoke(action, null);
                 }
+                // OnEnter caches the moved transform (a Component, not captured); rerunning it would restart the move
+                if (action is AnimatePositionBy animatePositionBy) {
+                    animatePositionBy.SetFieldValue("objectTransform",
+                        fsm.GetOwnerDefaultTarget(animatePositionBy.gameObject)?.transform);
+                }
 
                 RestoreSelf(action);
 
