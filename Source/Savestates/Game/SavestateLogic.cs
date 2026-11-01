@@ -479,13 +479,16 @@ public static class SavestateLogic {
                 go.Restore();
             }
 
-            var snapshotPaths = savestate.GameObjectSnapshots.Select(go => go.Path).ToHashSet();
-            foreach (var hm in SceneComponents<HealthManager>()) {
-                var path = ObjectUtils.ObjectPath(hm.gameObject);
-                if (!snapshotPaths.Contains(path)) {
-                    Log.Info($"- Destroying enemy {path}, killed before savestate");
-                    hm.gameObject.SetActive(false);
-                    UnityEngine.Object.Destroy(hm.gameObject);
+            // Only a scene savestate captured the scene's enemies; an in-place apply knows none of them
+            if (containsScene) {
+                var snapshotPaths = savestate.GameObjectSnapshots.Select(go => go.Path).ToHashSet();
+                foreach (var hm in SceneComponents<HealthManager>()) {
+                    var path = ObjectUtils.ObjectPath(hm.gameObject);
+                    if (!snapshotPaths.Contains(path)) {
+                        Log.Info($"- Destroying enemy {path}, killed before savestate");
+                        hm.gameObject.SetActive(false);
+                        UnityEngine.Object.Destroy(hm.gameObject);
+                    }
                 }
             }
         }
