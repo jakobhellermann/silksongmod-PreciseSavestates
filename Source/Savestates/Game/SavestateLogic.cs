@@ -139,6 +139,9 @@ public static class SavestateLogic {
                                 AddComponent(smrTarget.GetComponent<MeshRenderer>(), "SetMeshRenderer target");
                             }
                         }
+                        if (FsmTransformTargets.Of(action) is { } moved) {
+                            AddComponent(moved.transform, "fsm transform target");
+                        }
                         if (action is FadeNestedFadeGroup fade) {
                             var fadeTarget = action.Fsm.GetOwnerDefaultTarget(fade.Target);
                             if (fadeTarget) {
