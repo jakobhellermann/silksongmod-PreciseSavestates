@@ -55,6 +55,9 @@ public class Interop(SavestateModule module) {
     /// Applies the held snapshot (component/FSM/RNG/clock). No-op if none is pending.
     public void ApplyPendingSnapshot() => SavestateLogic.ApplyPendingSnapshot();
 
+    /// The step a savestate load runs before its scene transition (see SavestateLogic.PrepareSceneLoad).
+    public Task PrepareSceneLoad() => SavestateLogic.PrepareSceneLoad();
+
     /// Deletes the savestate(s) in the given slot/layer.
     public void DeleteSavestate(string? slot = null, string? layer = null) {
         module.DeleteSavestate(slot, layer);
