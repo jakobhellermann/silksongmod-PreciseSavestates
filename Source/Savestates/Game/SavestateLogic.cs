@@ -74,6 +74,8 @@ public static class SavestateLogic {
             gameObjectSnapshots.Add(GameObjectSnapshot.Of(player.gameObject)); // restore layer
             SnapshotSerializer.SnapshotRecursive(player, sceneBehaviours, seen, 0);
             AddComponent(player.AnimCtrl, "player.AnimCtrl");
+            // Holds a hit buffered until the next LateFixedUpdate
+            AddComponent(player.heroBox, "player.heroBox");
             AddComponent(player.AnimCtrl?.animator, "player animator");
 
             foreach (var fsm in player.GetComponents<PlayMakerFSM>()) {
