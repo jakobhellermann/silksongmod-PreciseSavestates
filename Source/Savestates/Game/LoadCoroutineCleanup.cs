@@ -107,6 +107,9 @@ internal static class LoadCoroutineCleanup {
             }
         }
 
+        // death slides the HUD out
+        GameCameras.instance.HUDIn();
+
         // SendEventSafe is a no-op if the fader is already clear. The two faders use different event names:
         // GameManager's screenFader_fsm takes "SCENE FADE IN", the camera's fadeFSM "FADE SCENE IN".
         var gm = GameManager.instance;
