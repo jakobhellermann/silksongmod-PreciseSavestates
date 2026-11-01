@@ -59,15 +59,12 @@ public static class HudFixes {
 
         // Re-initialize each mask's health_display FSM via silent init path.
         foreach (var fsm in health.GetComponentsInChildren<PlayMakerFSM>(true)) {
-            if (fsm.FsmName != "health_display") {
+            // the inactive one is the "Health 2+" template the masks are cloned from
+            if (fsm.FsmName != "health_display" || !fsm.gameObject.activeSelf) {
                 continue;
             }
 
-            if (fsm.gameObject.activeSelf) {
-                fsm.Fsm.OnEnable();
-            } else {
-                fsm.gameObject.SetActive(true);
-            }
+            fsm.Fsm.OnEnable();
 
             fsm.FsmVariables.FindFsmBool("Initialised").Value = true;
             fsm.FsmVariables.FindFsmBool("Skip HUD Frame Wait").Value = true;
