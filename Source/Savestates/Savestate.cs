@@ -21,6 +21,7 @@ public class Savestate {
     public List<PlayMakerFsmSnapshot>? FsmSnapshots;
     public List<RandomAudioTableSnapshot>? AudioTableSnapshots;
     public List<GameObjectSnapshot>? GameObjectSnapshots;
+    public DialogueSnapshot? Dialogue;
     
     public Random.State? RandomState;
 

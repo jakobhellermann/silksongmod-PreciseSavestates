@@ -217,6 +217,7 @@ public static class SavestateLogic {
             ComponentSnapshots = sceneBehaviours,
             GameObjectSnapshots = gameObjectSnapshots,
             FsmSnapshots = fsmSnapshots,
+            Dialogue = DialogueSnapshot.Of(DialogueBox._instance),
             AudioTableSnapshots = audioTableSnapshots,
             RandomState = Random.state,
             GameTime = Time.time,
@@ -491,9 +492,11 @@ public static class SavestateLogic {
 
         if (savestate.FsmSnapshots != null) {
             sw.Restart();
-            foreach (var fsm in savestate.FsmSnapshots) {
-                fsm.Restore();
-            }
+            DialogueSnapshot.RestoreDuring(savestate.Dialogue, () => {
+                foreach (var fsm in savestate.FsmSnapshots) {
+                    fsm.Restore();
+                }
+            });
 
             if (containsScene) {
                 Log.Info($"- Applied FSM snapshots in {sw.ElapsedMilliseconds}ms");

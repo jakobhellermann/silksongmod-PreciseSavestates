@@ -330,6 +330,13 @@ public class PlayMakerFsmSnapshot {
             }
         }
 
+        // finishes on enter, but the conversation it starts on the persistent DialogueBox runs until it exits the state
+        foreach (var action in targetState.Actions.OfType<RunDialogueBase>()) {
+            if (action.Enabled) {
+                action.OnEnter();
+            }
+        }
+
         return true;
     }
 
