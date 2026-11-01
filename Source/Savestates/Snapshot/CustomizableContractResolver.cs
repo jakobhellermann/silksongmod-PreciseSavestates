@@ -239,20 +239,18 @@ internal class RefConverter(int dummy) : JsonConverter {
             throw new JsonSerializationException($"Expected StartObject token, got {reader.TokenType}");
         }
 
+        var path = reader.Path;
+        var depth = reader.Depth;
         string? refPath = null;
-        while (reader.Read()) {
-            if (reader.TokenType == JsonToken.PropertyName && reader.Value?.ToString() == "$ref") {
+        while (reader.Read() && !(reader.TokenType == JsonToken.EndObject && reader.Depth == depth)) {
+            if (reader.Depth == depth + 1 && reader.TokenType == JsonToken.PropertyName && reader.Value?.ToString() == "$ref") {
                 reader.Read();
                 refPath = reader.Value?.ToString();
-                break;
             }
         }
 
         if (refPath == null) {
-            throw new JsonSerializationException($"Expected $ref property at {reader.Path}");
-        }
-
-        while (reader.Read() && reader.TokenType != JsonToken.EndObject) {
+            throw new JsonSerializationException($"Expected $ref property at {path}");
         }
 
         var resolved = ResolvePath(refPath);
