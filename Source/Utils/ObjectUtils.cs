@@ -3,12 +3,19 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using HarmonyLib;
+using PreciseSavestates.Source;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace PreciseSavestates.Utils;
 
 public static class ObjectUtils {
+    // Additive sub-scenes can share root names (e.g. two "Boss Scene" roots), so paths in them carry their scene
+    private const string SceneSeparator = "::";
+
+    private static Scene DontDestroyScene => GameManager.instance.gameObject.scene;
+    private static Scene MainScene => SceneManager.GetSceneByName(GameManager.instance.sceneName);
+
     public static string ObjectPath(GameObject obj) {
         List<string> segments = [];
         for (var current = obj; current != null; current = current.transform.parent?.gameObject) {
@@ -16,7 +23,12 @@ public static class ObjectUtils {
         }
 
         segments.Reverse();
-        return segments.Join(delimiter: "/");
+        var path = segments.Join(delimiter: "/");
+
+        var scene = obj.scene;
+        return scene.IsValid() && scene != MainScene && scene != DontDestroyScene
+            ? scene.name + SceneSeparator + path
+            : path;
     }
 
     [return: NotNullIfNotNull(nameof(component))]
@@ -51,19 +63,36 @@ public static class ObjectUtils {
     }
 
     public static GameObject? LookupPath(string path) {
-        var dontDestroyScene = GameManager.instance.gameObject.scene;
-        if (LookupPath(dontDestroyScene, path) is { } objD) {
+        var separator = path.IndexOf(SceneSeparator, StringComparison.Ordinal);
+        if (separator >= 0) {
+            var scene = SceneManager.GetSceneByName(path[..separator]);
+            return scene.isLoaded ? LookupPath(scene, path[(separator + SceneSeparator.Length)..]) : null;
+        }
+
+        if (LookupPath(DontDestroyScene, path) is { } objD) {
             return objD;
         }
 
-        for (var i = 0; i < SceneManager.sceneCount; i++) {
-            var scene = SceneManager.GetSceneAt(i);
-            if (LookupPath(scene, path) is { } obj) {
-                return obj;
-            }
+        var mainScene = MainScene;
+        if (mainScene.isLoaded && LookupPath(mainScene, path) is { } objM) {
+            return objM;
         }
 
-        return null;
+        // A bare path from before scene-qualified paths: accept it only where it is unambiguous
+        GameObject? found = null;
+        for (var i = 0; i < SceneManager.sceneCount; i++) {
+            var scene = SceneManager.GetSceneAt(i);
+            if (scene == mainScene || scene == DontDestroyScene || !scene.isLoaded || LookupPath(scene, path) is not { } obj) {
+                continue;
+            }
+            if (found) {
+                Log.Error($"Path '{path}' is ambiguous between scenes '{found!.scene.name}' and '{scene.name}'");
+                return null;
+            }
+            found = obj;
+        }
+
+        return found;
     }
 
     public static GameObject? LookupPath(Scene scene, string path) {
