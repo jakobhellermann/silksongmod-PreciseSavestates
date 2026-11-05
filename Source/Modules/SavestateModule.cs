@@ -64,7 +64,7 @@ public class SavestateModule(
     public static UnityEngine.Random.State? LastLoadedRandomState;
 
     /// Loads the (first) savestate stored in the given slot/layer. Returns whether one was found and loaded.
-    public async Task<bool> LoadSavestate(string? slot = null, string? layer = null) {
+    public async Task<bool> LoadSavestate(string? slot = null, string? layer = null, bool rebaseTimes = false) {
         var bySlot = savestates.List(slot, layer).ToList();
         switch (bySlot.Count) {
             case 0: return false;
@@ -77,7 +77,7 @@ public class SavestateModule(
             return false;
         }
 
-        return await LoadSavestate(savestate);
+        return await LoadSavestate(savestate, rebaseTimes);
     }
 
     /// Whether a savestate is stored in the given slot/layer.
@@ -129,7 +129,7 @@ public class SavestateModule(
         return await LoadSavestate(savestate);
     }
 
-    public async Task<bool> LoadSavestate(Savestate savestate) {
+    public async Task<bool> LoadSavestate(Savestate savestate, bool rebaseTimes = false) {
         // Loading is exclusive. Reject not only while a load runs, but also while a deferred snapshot is still pending:
         // with DeferSnapshotRestore the component/FSM/RNG restore is held until the driver applies it, and
         // IsLoadingSavestate is already false in that window. A reentrant load there overlaps scene transitions and
@@ -143,7 +143,7 @@ public class SavestateModule(
         try {
             IsLoadingSavestate = true;
 
-            await SavestateLogic.Load(savestate, loadMode);
+            await SavestateLogic.Load(savestate, loadMode, rebaseTimes);
             LastLoadedGameTime = savestate.GameTime;
             LastLoadedFrameCount = savestate.GameFrameCount;
             LastLoadedRandomState = savestate.RandomState;
@@ -169,7 +169,7 @@ public class SavestateModule(
             }
 
             var sw = Stopwatch.StartNew();
-            await LoadSavestate(SavestateSlotQuick, SavestateLayerQuick);
+            await LoadSavestate(SavestateSlotQuick, SavestateLayerQuick, rebaseTimes: true);
             Log.Info($"Loaded quicksave in {sw.ElapsedMilliseconds}ms");
         } catch (Exception e) {
             ToastManager.Toast(e);
@@ -206,7 +206,7 @@ public class SavestateModule(
             }
 
             var sw = Stopwatch.StartNew();
-            await LoadSavestate(savestate);
+            await LoadSavestate(savestate, rebaseTimes: true);
             Log.Info(
                 $"Loaded savestate {slot} in {sw.ElapsedMilliseconds}ms");
         } catch (Exception e) {

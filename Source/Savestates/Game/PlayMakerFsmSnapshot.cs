@@ -158,18 +158,27 @@ public class PlayMakerFsmSnapshot {
         };
     }
 
-    public bool Restore() {
+    private PlayMakerFSM? Resolve() {
         var go = ObjectUtils.LookupPath(Path);
         if (!go) {
             Log.Error($"Savestate stored FSM state on {Path}, which does not exist at load time");
-            return false;
+            return null;
         }
 
         // multiple PlayMakerFSMs can live on one GameObject, so disambiguate by FsmName
         var fsmComponent = go.GetComponents<PlayMakerFSM>().FirstOrDefault(f => f.Fsm.Name == FsmName);
         if (fsmComponent == null) {
             Log.Error($"Savestate stored FSM '{FsmName}' on {Path}, which has no such PlayMakerFSM");
-            return false;
+            return null;
+        }
+
+        return fsmComponent;
+    }
+
+    /// Returns the restored FSM, or null if it could not be resolved.
+    public PlayMakerFSM? Restore() {
+        if (Resolve() is not { } fsmComponent) {
+            return null;
         }
 
         var fsm = fsmComponent.Fsm;
@@ -252,7 +261,7 @@ public class PlayMakerFsmSnapshot {
         var targetState = fsm.GetState(ActiveState);
         if (targetState == null) {
             Log.Warning($"FSM {FsmName} has no state '{ActiveState}', leaving active state unchanged");
-            return true;
+            return fsmComponent;
         }
 
         fsm.activeState = targetState;
@@ -335,7 +344,7 @@ public class PlayMakerFsmSnapshot {
             }
         }
 
-        return true;
+        return fsmComponent;
     }
 
     // 24 actions cache a `FsmGameObject self` with the same pattern

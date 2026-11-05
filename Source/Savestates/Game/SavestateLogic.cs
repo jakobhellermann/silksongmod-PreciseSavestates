@@ -270,12 +270,13 @@ public static class SavestateLogic {
     public static bool IsLoadingSavestate;
     private static TaskCompletionSource<bool>? sceneLoadedSource;
 
-    public static async Task Load(Savestate savestate, SavestateLoadMode loadMode) {
+    /// <paramref name="rebaseTimes"/>: shift restored absolute timestamps onto the current clock (see AbsoluteTimeRebase).
+    public static async Task Load(Savestate savestate, SavestateLoadMode loadMode, bool rebaseTimes = false) {
         var total = Stopwatch.StartNew();
         var silent = string.IsNullOrEmpty(savestate.Scene);
         try {
             IsLoadingSavestate = true;
-            await LoadInner(savestate, loadMode);
+            await LoadInner(savestate, loadMode, rebaseTimes);
             if (!silent) {
                 ToastManager.Toast($"Loaded in {total.ElapsedMilliseconds}ms");
             }
@@ -294,7 +295,7 @@ public static class SavestateLogic {
         LoadCoroutineCleanup.Run();
     }
 
-    private static async Task LoadInner(Savestate savestate, SavestateLoadMode loadMode) {
+    private static async Task LoadInner(Savestate savestate, SavestateLoadMode loadMode, bool rebaseTimes) {
         var silent = string.IsNullOrEmpty(savestate.Scene);
         Log.Info($"Loading savestate... (scene='{savestate.Scene}', mode={loadMode})");
 
@@ -378,10 +379,13 @@ public static class SavestateLogic {
         }
 
         if (DeferSnapshotRestore) {
+            if (rebaseTimes) {
+                throw new InvalidOperationException("rebaseTimes is not supported with DeferSnapshotRestore");
+            }
             PendingSnapshot = savestate;
             pendingTiming = timing;
         } else {
-            ApplySnapshot(savestate, timing);
+            ApplySnapshot(savestate, timing, rebaseTimes);
             if (!silent) {
                 timing.LogSummary();
             }
@@ -472,10 +476,12 @@ public static class SavestateLogic {
         timing?.LogSummary();
     }
 
-    private static void ApplySnapshot(Savestate savestate, LoadTiming? timing = null) {
+    private static void ApplySnapshot(Savestate savestate, LoadTiming? timing = null, bool rebaseTimes = false) {
         var applyTotal = Stopwatch.StartNew();
         var sw = Stopwatch.StartNew();
         var containsScene = !string.IsNullOrEmpty(savestate.Scene);
+        var restoredFsms = new List<PlayMakerFSM>();
+        var restoredHero = false;
         
         if (savestate.GameObjectSnapshots != null) {
             foreach (var go in savestate.GameObjectSnapshots) {
@@ -500,7 +506,9 @@ public static class SavestateLogic {
 
         if (savestate.ComponentSnapshots != null) {
             foreach (var mb in savestate.ComponentSnapshots) {
-                mb.Restore();
+                if (mb.Restore() && mb.Path.EndsWith("@HeroController")) {
+                    restoredHero = true;
+                }
             }
             
             // In order to make collision trigger enter/exit events stable, load the rigidbody positions first and perform
@@ -517,7 +525,9 @@ public static class SavestateLogic {
             sw.Restart();
             DialogueSnapshot.RestoreDuring(savestate.Dialogue, () => {
                 foreach (var fsm in savestate.FsmSnapshots) {
-                    fsm.Restore();
+                    if (fsm.Restore() is { } restored) {
+                        restoredFsms.Add(restored);
+                    }
                 }
             });
 
@@ -562,6 +572,19 @@ public static class SavestateLogic {
             savestate.Music?.RestoreAfterSceneAudio();
             HudFixes.RefreshHealthHud();
             HudFixes.RefreshSilkHud();
+        }
+
+        if (rebaseTimes) {
+            if (savestate.GameTime is not { } gameTime) {
+                throw new InvalidOperationException("Cannot rebase absolute times: savestate has no GameTime");
+            }
+
+            var delta = Time.timeAsDouble - gameTime;
+            Log.Info($"- Rebasing absolute times by {delta:F3}s");
+            if (restoredHero) {
+                AbsoluteTimeRebase.RebaseHero(HeroController.instance, delta);
+            }
+            AbsoluteTimeRebase.RebaseFsms(restoredFsms, delta);
         }
 
         timing?.Add("apply", applyTotal.ElapsedMilliseconds);

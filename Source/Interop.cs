@@ -37,6 +37,9 @@ public class Interop(SavestateModule module) {
         return module.LoadSavestateFromFile(path);
     }
 
+    /// Shifts all live absolute-time state (hero timers, FSM time-limit variables) by <paramref name="delta" /> seconds.
+    public void RebaseAbsoluteTimes(double delta) => AbsoluteTimeRebase.RebaseAll(delta);
+
     public float? LastLoadedGameTime => SavestateModule.LastLoadedGameTime;
     public int? LastLoadedFrameCount => SavestateModule.LastLoadedFrameCount;
     public UnityEngine.Random.State? LastLoadedRandomState => SavestateModule.LastLoadedRandomState;
