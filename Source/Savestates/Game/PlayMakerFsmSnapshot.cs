@@ -58,7 +58,7 @@ public class PlayMakerFsmSnapshot {
         typeof(FaceObjectV2),
     ];
 
-    // Safely ignorable unsave fsm variables
+    // Safely ignorable unsaved fsm variables
     private static readonly HashSet<(string Fsm, string Variable)> dropWarnSilenced = [
         ("Bind", "Bind Voice Clip"),
         ("Sprint", "Clip"),
@@ -80,6 +80,12 @@ public class PlayMakerFsmSnapshot {
         ("Detect Landing", "Land Audio Table"),
         ("Detect Landing", "Land Audio Table 2"),
         ("Detect Landing", "Tink Audio Table"),
+        ("tilt_plat", "Land Audio Clip Table"),
+        ("tilt_plat", "Creak Audio Clip Table"),
+        // only read by AudioPlayerOneShotSingle, never written
+        ("interactive_bell", "Strike Clip"),
+        // authored cost asset, only passed into the RunFSM template
+        ("Unlock Behaviour", "Cost Reference"),
     ];
 
     private static bool IsSerializableVariable(VariableType type) {

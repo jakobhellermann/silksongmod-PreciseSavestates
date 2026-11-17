@@ -103,8 +103,12 @@ public static class SavestateLogic {
             foreach (var hm in enemies) {
                 AddComponent(hm, "hm");
                 AddComponent(hm.transform, "hm.transform");
-                AddComponent(hm.GetComponent<MeshRenderer>(), "hm.MeshRenderer");
-                AddComponent(hm.GetComponent<Rigidbody2D>(), "hm.Rigidbody2D");
+                if (hm.TryGetComponent<MeshRenderer>(out var renderer)) {
+                    AddComponent(renderer, "hm.MeshRenderer");
+                }
+                if (hm.TryGetComponent<Rigidbody2D>(out var rb)) {
+                    AddComponent(rb, "hm.Rigidbody2D");
+                }
             }
 
             // FSM-anchored snapshots
