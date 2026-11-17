@@ -199,6 +199,11 @@ public static class SavestateLogic {
             gameObjectTargets.UnionWith(enemies.Select(hm => hm.gameObject));
 
             gameObjectSnapshots.AddRange(gameObjectTargets.Select(GameObjectSnapshot.Of));
+            foreach (var animator in gameObjectTargets.SelectMany(go => go.GetComponents<Animator>())) {
+                if (animator.isActiveAndEnabled) {
+                    AddComponent(animator, "animator");
+                }
+            }
         }
 
         JToken? playerData = null;

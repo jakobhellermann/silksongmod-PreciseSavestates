@@ -97,7 +97,6 @@ public static class SnapshotSerializer {
             new QuaternionConverter(),
             new ColorConverter(),
             new Color32Converter(),
-            // new AnimatorConverter(), TODO
             new StringEnumConverter(),
             ..GameSpecific.ExtraConverters,
         ],
