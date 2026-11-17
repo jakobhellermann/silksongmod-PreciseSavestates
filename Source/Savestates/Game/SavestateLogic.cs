@@ -114,11 +114,18 @@ public static class SavestateLogic {
             
             var seenFsmObjects = new HashSet<GameObject>();
             var gameObjectTargets = new HashSet<GameObject>();
+            // persistent FSMs driven by scene FSM actions
+            var persistentFsms = new HashSet<PlayMakerFSM>();
             foreach (var fsm in PlayMakerFSM.FsmList) {
-                if (!fsm || !sceneNames.Contains(fsm.gameObject.scene.name)) {
-                    continue;
+                if (fsm && sceneNames.Contains(fsm.gameObject.scene.name)) {
+                    CaptureFsm(fsm);
                 }
+            }
+            foreach (var fsm in persistentFsms) {
+                CaptureFsm(fsm);
+            }
 
+            void CaptureFsm(PlayMakerFSM fsm) {
                 fsmSnapshots.Add(PlayMakerFsmSnapshot.Of(fsm));
 
                 var go = fsm.gameObject;
@@ -143,6 +150,12 @@ public static class SavestateLogic {
                             if (ssrTarget) {
                                 AddComponent(ssrTarget.GetComponent<SpriteRenderer>(), "SetSpriteRenderer target");
                             }
+                        }
+                        if (action is StartRoarEmitter roar) {
+                            var emitter = gm.gameCams.transform.Find(roar.isSmall.Value ? "Roar Wave Emitter Small" : "Roar Wave Emitter");
+                            persistentFsms.Add(emitter.GetComponent<PlayMakerFSM>());
+                            // moved to the spawn point on each roar
+                            AddComponent(emitter, "roar emitter transform");
                         }
                         if (FsmTransformTargets.Of(action) is { } moved) {
                             AddComponent(moved.transform, "fsm transform target");
@@ -174,7 +187,7 @@ public static class SavestateLogic {
                 }
 
                 if (!seenFsmObjects.Add(go)) {
-                    continue;
+                    return;
                 }
 
                 foreach (var collider in go.GetComponents<Collider2D>()) {
