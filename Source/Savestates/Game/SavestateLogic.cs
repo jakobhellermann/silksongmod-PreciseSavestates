@@ -30,7 +30,8 @@ public enum SavestateFilter {
     // Bosses/enemies (HealthManager actors) and the active + additive scenes' PlayMaker FSMs — separate from Scene
     // (SceneData) because it's live actor state, not persisted save data.
     Enemies = 1 << 3,
-    All = Player | Scene | Enemies,
+    Music = 1 << 4,
+    All = Player | Scene | Enemies | Music,
 }
 
 [Flags]
@@ -227,7 +228,7 @@ public static class SavestateLogic {
             GameFrameCount = Time.frameCount,
             FixedUpdateCycle = CustomPlayerLoop.FixedUpdateCycle,
             HazardRespawn = HazardRespawnSnapshot.Of(PlayerData.instance),
-            Music = filter.HasFlag(SavestateFilter.Scene) ? MusicSnapshot.Of(gm.AudioManager) : null,
+            Music = filter.HasFlag(SavestateFilter.Music) ? MusicSnapshot.Of(gm.AudioManager) : null,
             PlayerData = playerData,
             SceneData = sceneData,
         };
