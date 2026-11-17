@@ -357,6 +357,8 @@ public static class SavestateLogic {
                     Visualization = GameManager.SceneLoadVisualizations.Default,
                 });
                 await sceneLoadedSource.Task;
+                // transitions send this, EnterSceneDreamGate doesn't. Steps lingering idle music.
+                EventRegister.SendEvent("ENTERING SCENE");
 
                 // TODO: reevaluate
                 SceneAdditiveLoadConditional.LoadInSequence = false;
