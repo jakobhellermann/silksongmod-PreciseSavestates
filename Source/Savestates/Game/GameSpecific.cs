@@ -41,6 +41,9 @@ public static class GameSpecific {
             typeof(AnimationCurve),
             typeof(AnimationClip),
             typeof(Rect),
+            // runtime-attached by OnEnter, never restorable state
+            typeof(PlayMakerUnity2DProxy),
+            typeof(iTweenFSMEvents),
             // todo
             typeof(Transform), // maybe
             typeof(RenderTexture),
