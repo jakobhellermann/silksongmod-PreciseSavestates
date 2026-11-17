@@ -201,7 +201,7 @@ public class CustomizableContractResolver : DefaultContractResolver {
     }
 
     private bool RefType(Type type) {
-        return (typeof(Component).IsAssignableFrom(type) && type != typeof(Animator)) || type == typeof(GameObject);
+        return typeof(Component).IsAssignableFrom(type) || type == typeof(GameObject);
     }
 }
 
