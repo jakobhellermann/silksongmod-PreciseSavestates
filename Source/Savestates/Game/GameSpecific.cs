@@ -48,7 +48,6 @@ public static class GameSpecific {
             typeof(Texture3D),
             typeof(SpriteRenderer), // maybe
             typeof(LayerMask), // maybe
-            typeof(Collider2D), // maybe
             typeof(ScriptableObject),
             // handled via dedicated snapshot, ignore fsm and backreferences
             typeof(Fsm),
