@@ -161,10 +161,13 @@ public class CustomizableContractResolver : DefaultContractResolver {
         }
 
         var isItemRefType = RefType(itemType);
+        var isInterfaceRef = !isCollection && type.IsInterface && !typeof(IEnumerable).IsAssignableFrom(type);
         if (PropertyConverters.TryGetValue(itemType, out var customConverter)) {
             property.Converter = customConverter;
         } else if (isItemRefType) {
             property.Converter = new RefConverter(0);
+        } else if (isInterfaceRef) {
+            property.Converter = new InterfaceRefConverter(0);
         }
 
         if (ContainerTypesToIgnore.Contains(member.DeclaringType)) {
@@ -177,7 +180,7 @@ public class CustomizableContractResolver : DefaultContractResolver {
                 $"Auto-skipping {member.DeclaringType?.Name}.{member.Name}: {itemType.Name} has unserializable members");
         }
 
-        if (!isCollection && isItemRefType) {
+        if (!isCollection && (isItemRefType || isInterfaceRef)) {
             // Omit refs into prefabs (invalid scene, there's no stable path)
             property.ShouldSerialize = instance => {
                 if (!shouldSerialize) {
@@ -210,6 +213,15 @@ internal class RefConverter(int dummy) : JsonConverter {
 
     public static HashSet<Component> References = [];
 
+    internal static void WriteComponent(JsonWriter writer, Component component) {
+        if (!component) {
+            throw new NotImplementedException("!component");
+        }
+
+        References.Add(component);
+        WriteReference(writer, component);
+    }
+
     private static void WriteReference(JsonWriter writer, object? obj) {
         if (obj == null) {
             writer.WriteNull();
@@ -230,7 +242,7 @@ internal class RefConverter(int dummy) : JsonConverter {
     }
 
     // returns (found: true, null) for explicit null, (found: false, null) for unresolvable ref
-    private static (bool found, object? value) ReadReference(JsonReader reader) {
+    internal static (bool found, object? value) ReadReference(JsonReader reader) {
         if (reader.TokenType == JsonToken.Null) {
             return (true, null);
         }
@@ -284,12 +296,7 @@ internal class RefConverter(int dummy) : JsonConverter {
 
         switch (value) {
             case Component component:
-                if (!component) {
-                    throw new NotImplementedException("!component");
-                }
-
-                References.Add(component);
-                WriteReference(writer, value);
+                WriteComponent(writer, component);
                 break;
             case GameObject go:
                 if (!go) {
@@ -389,4 +396,46 @@ internal class RefConverter(int dummy) : JsonConverter {
             _ => throw new NotImplementedException($"GetRef not supported for {obj.GetType()}"),
         };
     }
+}
+
+// Interface-typed field: Components are stored as $ref like any Component field, other implementations by value
+#pragma warning disable CS9113 // Parameter is unread.
+internal class InterfaceRefConverter(int dummy) : JsonConverter {
+#pragma warning restore CS9113 // Parameter is unread.
+    public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer) {
+        if (value is Component component) {
+            RefConverter.WriteComponent(writer, component);
+        } else {
+            serializer.Serialize(writer, value);
+        }
+    }
+
+    public override object? ReadJson(JsonReader reader, Type type, object? existingValue,
+        JsonSerializer serializer) {
+        var token = JToken.ReadFrom(reader);
+        if (token.Type == JTokenType.Null) {
+            return null;
+        }
+
+        if (token is JObject obj && obj.ContainsKey("$ref")) {
+            var refReader = token.CreateReader();
+            refReader.Read();
+            var (found, value) = RefConverter.ReadReference(refReader);
+            if (!found) {
+                Log.Warning($"Could not resolve $ref for {type.Name} at {reader.Path}, keeping existing value");
+                return existingValue;
+            }
+
+            return value;
+        }
+
+        if (existingValue != null) {
+            serializer.Populate(token.CreateReader(), existingValue);
+            return existingValue;
+        }
+
+        return token.ToObject(type, serializer);
+    }
+
+    public override bool CanConvert(Type objectType) => true;
 }
