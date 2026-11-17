@@ -241,10 +241,10 @@ internal class RefConverter(int dummy) : JsonConverter {
             : ObjectUtils.LookupPath(path);
     }
 
-    // returns (found: true, null) for explicit null, (found: false, null) for unresolvable ref
-    internal static (bool found, object? value) ReadReference(JsonReader reader) {
+    // unresolvedRef is the stored path when it doesn't resolve, null otherwise (also for an explicit null)
+    internal static (object? value, string? unresolvedRef) ReadReference(JsonReader reader) {
         if (reader.TokenType == JsonToken.Null) {
-            return (true, null);
+            return (null, null);
         }
 
         if (reader.TokenType != JsonToken.StartObject) {
@@ -266,7 +266,7 @@ internal class RefConverter(int dummy) : JsonConverter {
         }
 
         var resolved = ResolvePath(refPath);
-        return resolved != null ? (true, resolved) : (false, null);
+        return resolved != null ? (resolved, null) : (null, refPath);
     }
 
     private static IEnumerable<object?> ReadReferenceArray(JsonReader reader) {
@@ -277,9 +277,9 @@ internal class RefConverter(int dummy) : JsonConverter {
         reader.Read();
 
         while (reader.TokenType != JsonToken.EndArray) {
-            var (found, value) = ReadReference(reader);
-            if (!found) {
-                Log.Warning($"Could not resolve $ref in array at {reader.Path}, skipping element");
+            var (value, unresolvedRef) = ReadReference(reader);
+            if (unresolvedRef != null) {
+                Log.Warning($"Could not resolve $ref '{unresolvedRef}' in array at {reader.Path}, inserting null");
             }
 
             yield return value;
@@ -372,9 +372,9 @@ internal class RefConverter(int dummy) : JsonConverter {
         }
 
         if (type == typeof(GameObject) || typeof(Component).IsAssignableFrom(type)) {
-            var (found, value) = ReadReference(reader);
-            if (!found) {
-                Log.Warning($"Could not resolve $ref for {type.Name}, keeping existing value");
+            var (value, unresolvedRef) = ReadReference(reader);
+            if (unresolvedRef != null) {
+                Log.Warning($"Could not resolve $ref '{unresolvedRef}' at {reader.Path}, keeping existing value");
                 return existingValue;
             }
 
@@ -420,9 +420,9 @@ internal class InterfaceRefConverter(int dummy) : JsonConverter {
         if (token is JObject obj && obj.ContainsKey("$ref")) {
             var refReader = token.CreateReader();
             refReader.Read();
-            var (found, value) = RefConverter.ReadReference(refReader);
-            if (!found) {
-                Log.Warning($"Could not resolve $ref for {type.Name} at {reader.Path}, keeping existing value");
+            var (value, unresolvedRef) = RefConverter.ReadReference(refReader);
+            if (unresolvedRef != null) {
+                Log.Warning($"Could not resolve $ref '{unresolvedRef}' at {reader.Path}, keeping existing value");
                 return existingValue;
             }
 
