@@ -87,8 +87,9 @@ public class PlayMakerFsmSnapshot {
             or VariableType.Color or VariableType.Rect or VariableType.Quaternion or VariableType.Enum;
     }
 
-    public static PlayMakerFsmSnapshot Of(PlayMakerFSM fsmComponent) {
-        var fsm = fsmComponent.Fsm;
+    public static PlayMakerFsmSnapshot Of(PlayMakerFSM fsmComponent) => Of(fsmComponent.Fsm, fsmComponent.gameObject);
+
+    private static PlayMakerFsmSnapshot Of(Fsm fsm, GameObject owner) {
 
         var variables = new Dictionary<string, JToken>();
         var gameObjectVariables = new Dictionary<string, string?>();
@@ -122,11 +123,11 @@ public class PlayMakerFsmSnapshot {
                 } else if (obj is Component comp) {
                     objectVariables[v.Name] = ObjectUtils.ObjectComponentPath(comp);
                 } else if (!dropWarnSilenced.Contains((fsm.Name, v.Name))) {
-                    Log.Warning($"Not capturing FSM asset variable {ObjectUtils.ObjectPath(fsmComponent.gameObject)}/"
+                    Log.Warning($"Not capturing FSM asset variable {ObjectUtils.ObjectPath(owner)}/"
                                 + $"{fsm.Name}.{v.Name} ({obj.GetType().Name})");
                 }
             } else if (!dropWarnSilenced.Contains((fsm.Name, v.Name))) {
-                Log.Warning($"Not capturing FSM variable {ObjectUtils.ObjectPath(fsmComponent.gameObject)}/"
+                Log.Warning($"Not capturing FSM variable {ObjectUtils.ObjectPath(owner)}/"
                             + $"{fsm.Name}.{v.Name} ({v.VariableType})");
             }
         }
@@ -139,16 +140,20 @@ public class PlayMakerFsmSnapshot {
         if (activeStateIndex >= 0) {
             var stateActions = states[activeStateIndex].Actions;
             for (var ai = 0; ai < stateActions.Length; ai++) {
+                var action = stateActions[ai];
                 actions.Add(new FsmActionSnapshot {
                     StateIndex = activeStateIndex,
                     ActionIndex = ai,
-                    Data = SnapshotSerializer.Snapshot(stateActions[ai]),
+                    Data = SnapshotSerializer.Snapshot(action),
+                    SubFsm = action is RunFSMAction { Active: true, Finished: false } run
+                        ? Of(run.runFsm, owner)
+                        : null,
                 });
             }
         }
 
         return new PlayMakerFsmSnapshot {
-            Path = ObjectUtils.ObjectPath(fsmComponent.gameObject),
+            Path = ObjectUtils.ObjectPath(owner),
             FsmName = fsm.Name,
             ActiveState = fsm.ActiveStateName,
             Variables = variables,
@@ -181,7 +186,11 @@ public class PlayMakerFsmSnapshot {
             return null;
         }
 
-        var fsm = fsmComponent.Fsm;
+        RestoreInto(fsmComponent.Fsm);
+        return fsmComponent;
+    }
+
+    private void RestoreInto(Fsm fsm) {
 
         // set variables by name into the live (prefab-wired) instances
         foreach (var v in fsm.Variables.GetAllNamedVariables()) {
@@ -252,7 +261,16 @@ public class PlayMakerFsmSnapshot {
                 continue;
             }
 
-            SnapshotSerializer.Populate(stateActions[a.ActionIndex], a.Data);
+            var action = stateActions[a.ActionIndex];
+            SnapshotSerializer.Populate(action, a.Data);
+
+            // the sub-FSM lives on the action across loads, so it still holds whatever ran before the load
+            if (a.SubFsm != null) {
+                var subFsm = ((RunFSMAction)action).runFsm;
+                a.SubFsm.RestoreInto(subFsm);
+                subFsm.Started = true;
+                subFsm.Finished = false;
+            }
         }
 
         // Restore the active state directly, without re-running OnEnter actions: Fsm.Update only calls Continue()
@@ -261,7 +279,7 @@ public class PlayMakerFsmSnapshot {
         var targetState = fsm.GetState(ActiveState);
         if (targetState == null) {
             Log.Warning($"FSM {FsmName} has no state '{ActiveState}', leaving active state unchanged");
-            return fsmComponent;
+            return;
         }
 
         fsm.activeState = targetState;
@@ -309,6 +327,13 @@ public class PlayMakerFsmSnapshot {
                     or Tk2dWatchAnimationEvents or Tk2dWatchAnimationEventsV2 or Tk2dWatchAnimationEventsV3) {
                     RewireTk2dAnimationEvents(action);
                 }
+
+                // OnEnter subscribes this, forwarding the sub-FSM's output events (CANCEL, FINISHED, ...) to the parent
+                if (action is RunFSM run) {
+                    var forward = (Action<FsmEvent>)Delegate.CreateDelegate(typeof(Action<FsmEvent>), run, "OnOutputEvent");
+                    run.runFsm.OnOutputEvent -= forward;
+                    run.runFsm.OnOutputEvent += forward;
+                }
             }
         }
 
@@ -343,8 +368,6 @@ public class PlayMakerFsmSnapshot {
                 action.OnEnter();
             }
         }
-
-        return fsmComponent;
     }
 
     // 24 actions cache a `FsmGameObject self` with the same pattern
@@ -402,4 +425,6 @@ public class FsmActionSnapshot {
     public required int StateIndex;
     public required int ActionIndex;
     public required JToken Data;
+
+    public PlayMakerFsmSnapshot? SubFsm;
 }
