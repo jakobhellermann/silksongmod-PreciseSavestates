@@ -151,6 +151,11 @@ public static class SavestateLogic {
                                 AddComponent(fadeGroup, "FadeNestedFadeGroup target");
                             }
                         }
+                        if (action is HutongGames.PlayMaker.Actions.ActivateAllChildren { gameObject.Value: { } parent }) {
+                            foreach (Transform child in parent.transform) {
+                                gameObjectTargets.Add(child.gameObject);
+                            }
+                        }
                         if (ownerDefault == null) {
                             continue;
                         }
