@@ -138,6 +138,12 @@ public static class SavestateLogic {
                                 AddComponent(smrTarget.GetComponent<MeshRenderer>(), "SetMeshRenderer target");
                             }
                         }
+                        if (action is SetSpriteRenderer ssr) {
+                            var ssrTarget = action.Fsm.GetOwnerDefaultTarget(ssr.gameObject);
+                            if (ssrTarget) {
+                                AddComponent(ssrTarget.GetComponent<SpriteRenderer>(), "SetSpriteRenderer target");
+                            }
+                        }
                         if (FsmTransformTargets.Of(action) is { } moved) {
                             AddComponent(moved.transform, "fsm transform target");
                         }
