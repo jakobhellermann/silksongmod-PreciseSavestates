@@ -154,7 +154,7 @@ public static class ObjectUtils {
         }
 
         // PERF
-        var matches = obj.GetComponents<Component>().Where(c => c.GetType().Name == componentName).ToArray();
+        var matches = obj.GetComponents<Component>().Where(c => c && c.GetType().Name == componentName).ToArray();
         if (index is { } idx) {
             return idx < matches.Length ? matches[idx] : null;
         }
