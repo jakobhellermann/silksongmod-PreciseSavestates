@@ -155,6 +155,14 @@ public static class SavestateLogic {
                                 AddComponent(ssrTarget.GetComponent<SpriteRenderer>(), "SetSpriteRenderer target");
                             }
                         }
+                        if (action is CallMethodProper call
+                            && action.Fsm.GetOwnerDefaultTarget(call.gameObject) is { } callTarget && callTarget
+                            && sceneNames.Contains(callTarget.scene.name)) {
+                            gameObjectTargets.Add(callTarget);
+                            if (callTarget.GetComponent(call.behaviour.Value) is { } behaviour) {
+                                AddComponent(behaviour, "CallMethodProper target");
+                            }
+                        }
                         if (action is StartRoarEmitter roar) {
                             var emitter = gm.gameCams.transform.Find(roar.isSmall.Value ? "Roar Wave Emitter Small" : "Roar Wave Emitter");
                             persistentFsms.Add(emitter.GetComponent<PlayMakerFSM>());
