@@ -36,6 +36,7 @@ public class Savestate {
     // [NonSerialized] data
     public HazardRespawnSnapshot? HazardRespawn;
     public MusicSnapshot? Music;
+    public List<CoroutineSnapshot>? Coroutines;
 
     public void SerializeTo(StreamWriter writer) {
         JsonSerializer.Create(jsonSettings).Serialize(writer, this);

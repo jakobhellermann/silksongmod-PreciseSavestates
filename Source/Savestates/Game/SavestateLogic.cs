@@ -64,6 +64,7 @@ public static class SavestateLogic {
         var sceneBehaviours = new List<ComponentSnapshot>();
         var gameObjectSnapshots = new List<GameObjectSnapshot>();
         var fsmSnapshots = new List<PlayMakerFsmSnapshot>();
+        List<CoroutineSnapshot>? coroutineSnapshots = null;
         var audioTableSnapshots = new List<RandomAudioTableSnapshot>();
 
         if (filter.HasFlag(SavestateFilter.Player)) {
@@ -115,6 +116,7 @@ public static class SavestateLogic {
             var additiveScenes = CurrentAdditiveScenes();
             var sceneNames = new HashSet<string> { gm.sceneName };
             sceneNames.UnionWith(additiveScenes);
+            coroutineSnapshots = CoroutineSnapshot.Of(go => sceneNames.Contains(go.scene.name));
             
             var seenFsmObjects = new HashSet<GameObject>();
             var gameObjectTargets = new HashSet<GameObject>();
@@ -291,6 +293,7 @@ public static class SavestateLogic {
             FixedUpdateCycle = CustomPlayerLoop.FixedUpdateCycle,
             HazardRespawn = HazardRespawnSnapshot.Of(PlayerData.instance),
             Music = filter.HasFlag(SavestateFilter.Music) ? MusicSnapshot.Of(gm.AudioManager) : null,
+            Coroutines = coroutineSnapshots,
             PlayerData = playerData,
             SceneData = sceneData,
         };
@@ -638,12 +641,8 @@ public static class SavestateLogic {
         // must run after scene entry
         savestate.HazardRespawn?.Restore();
 
-        // saved during the first wave's start delay, whose StartWave coroutine is lost
-        foreach (var battleScene in SceneComponents<BattleScene>()) {
-            if (battleScene.started && !battleScene.completed && battleScene.currentWave == 0 && battleScene.currentEnemies == 0) {
-                Log.Info($"- Restarting first wave of {ObjectUtils.ObjectPath(battleScene.gameObject)}");
-                battleScene.StartCoroutine(battleScene.StartWave(0));
-            }
+        foreach (var coroutine in savestate.Coroutines ?? []) {
+            coroutine.Restore();
         }
 
         if (!string.IsNullOrEmpty(savestate.Scene)) {
