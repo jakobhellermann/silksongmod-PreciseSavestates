@@ -335,6 +335,11 @@ public class PlayMakerFsmSnapshot {
                     animatePositionBy.SetFieldValue("objectTransform",
                         fsm.GetOwnerDefaultTarget(animatePositionBy.gameObject)?.transform);
                 }
+                if (action is CharacterCheckForBump bump) {
+                    var target = fsm.GetOwnerDefaultTarget(bump.Target);
+                    var checker = target.GetComponent<CharacterBumpCheck>() ?? target.AddComponent<CharacterBumpCheck>();
+                    bump.SetFieldValue("bumpChecker", checker);
+                }
 
                 RestoreSelf(action);
 

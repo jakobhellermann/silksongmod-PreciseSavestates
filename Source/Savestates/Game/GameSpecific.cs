@@ -94,6 +94,8 @@ public static class GameSpecific {
                 nameof(HeroController.configs), nameof(HeroController.specialConfigs)]
             },
             { typeof(CameraController), [nameof(CameraController.instantLockedArea)] }, // transient? TODO
+            // cached in OnEnter, re-resolved in restore
+            { typeof(CharacterCheckForBump), ["bumpChecker"] },
             // CallStaticMethod caches its resolved MethodInfo/Type/ParameterInfo (unresolvable) keyed on cachedClassName/cachedMethodName
             // Skipping it recomputes the cache.
             { typeof(CallStaticMethod), [nameof(CallStaticMethod.cachedClassName), nameof(CallStaticMethod.cachedMethodName), nameof(CallStaticMethod.parameters)] },
