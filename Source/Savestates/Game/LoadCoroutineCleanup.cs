@@ -25,6 +25,25 @@ internal static class LoadCoroutineCleanup {
         }
     }
 
+    // Unity finishes scene loads in order, so a preload that is loaded but never activated (PlayerDead preloads the respawn
+    // scene) blocks our load forever. Activate it; SceneLoad unloads it again afterwards
+    public static async Task EndPendingScenePreloads() {
+        if (!ScenePreloader.HasPendingOperations) {
+            return;
+        }
+
+        var done = false;
+        GameManager.instance.StartCoroutine(Then(ScenePreloader.ForceEndPendingOperations(), () => done = true));
+        while (!done) {
+            await Task.Yield();
+        }
+    }
+
+    private static IEnumerator Then(IEnumerator routine, Action onDone) {
+        yield return routine;
+        onDone();
+    }
+
     // A started preload issues its load a frame later, i.e. after ours (deadlock, see above); LoadRoutine is its only coroutine
     private static void StopPendingScenePreloads() {
         foreach (var preloader in Object.FindObjectsByType<ScenePreloader>(FindObjectsSortMode.None)) {

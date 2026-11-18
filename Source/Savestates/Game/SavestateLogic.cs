@@ -322,6 +322,7 @@ public static class SavestateLogic {
     /// Before a scene transition: no pending scene preload (see LoadCoroutineCleanup), PLAYING, no in-flight death.
     public static async Task PrepareSceneLoad() {
         await LoadCoroutineCleanup.WaitForPendingScenePreloads();
+        await LoadCoroutineCleanup.EndPendingScenePreloads();
         var state = GameManager.instance.GameState;
         if (state != GameState.PLAYING) {
             throw new Exception($"Can't load in state {state}");
