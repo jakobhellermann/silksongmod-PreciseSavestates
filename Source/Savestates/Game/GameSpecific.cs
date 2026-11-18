@@ -72,6 +72,13 @@ public static class GameSpecific {
             // not previousAlpha, so OnLateUpdate notices the changed alpha and applies it
             { typeof(NestedFadeGroupBase), [nameof(NestedFadeGroupBase.alpha)] },
             { typeof(NestedFadeGroup), [] },
+            { typeof(VectorCurveAnimator), [
+                "elapsed", "delayLeft", "isAnimating", "initialVector", "currentOffset", "hasCurrentOffsetChanged",
+                "nextUpdateTime", "speedMultiplier", "offset", nameof(VectorCurveAnimator.FreezePosition)] },
+            // their `Vector` property is the animated transform, captured separately
+            { typeof(CurveOffsetAnimation), [] },
+            { typeof(CurveRotationAnimation), [] },
+            { typeof(CurveScaleAnimation), [] },
             // the targets GenerateTargets derived at tween start, and the progress through them
             { typeof(iTween), ["vector3s", "vector2s", "floats", "colors", "rects", "runningTime", "percentage", "reverse"] },
         },

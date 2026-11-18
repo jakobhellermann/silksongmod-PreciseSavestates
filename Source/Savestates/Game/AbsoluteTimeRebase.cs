@@ -78,6 +78,12 @@ public static class AbsoluteTimeRebase {
         }
     }
 
+    public static void RebaseCurveAnimators(IEnumerable<VectorCurveAnimator> animators, double delta) {
+        foreach (var animator in animators) {
+            animator.nextUpdateTime += delta;
+        }
+    }
+
     public static void RebaseFsms(IEnumerable<PlayMakerFSM> fsms, double delta) {
         foreach (var fsm in fsms.Where(fsm => fsm)) {
             RebaseFsm(fsm.Fsm, delta);

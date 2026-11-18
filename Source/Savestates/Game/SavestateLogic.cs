@@ -212,6 +212,14 @@ public static class SavestateLogic {
             }
 
             // extra component snapshots
+            foreach (var animator in ActiveCurveAnimators()) {
+                var animated = animator.CurrentTransform;
+                if (animated.GetComponentInChildren<Collider2D>(true)) {
+                    AddComponent(animator, "curve animator");
+                    AddComponent(animated, "curve animator transform");
+                }
+            }
+
             foreach (var breakable in SceneComponents<Breakable>().Where(b => b.IsBroken)) {
                 AddComponent(breakable, "breakable");
                 AddComponent(breakable.GetComponent<Collider2D>(), "breakable collider");
@@ -474,6 +482,12 @@ public static class SavestateLogic {
         return scenes;
     }
 
+    // the UpdateBatcher registers one animator per GameObject, which drives all of its siblings
+    private static IEnumerable<VectorCurveAnimator> ActiveCurveAnimators() =>
+        GameManager.instance.GetComponent<UpdateBatcher>().lateUpdates.List
+            .OfType<VectorCurveAnimator>()
+            .SelectMany(a => a.GetComponents<VectorCurveAnimator>());
+
     private static IEnumerable<T> SceneComponents<T>() where T : Component {
         for (var i = 0; i < SceneManager.sceneCount; i++) {
             foreach (var root in SceneManager.GetSceneAt(i).GetRootGameObjects()) {
@@ -527,6 +541,7 @@ public static class SavestateLogic {
         var containsScene = !string.IsNullOrEmpty(savestate.Scene);
         var restoredFsms = new List<PlayMakerFSM>();
         var restoredHero = false;
+        var restoredCurveAnimators = new List<VectorCurveAnimator>();
         
         if (savestate.GameObjectSnapshots != null) {
             foreach (var go in savestate.GameObjectSnapshots) {
@@ -551,8 +566,13 @@ public static class SavestateLogic {
 
         if (savestate.ComponentSnapshots != null) {
             foreach (var mb in savestate.ComponentSnapshots) {
-                if (mb.Restore() && mb.Path.EndsWith("@HeroController")) {
-                    restoredHero = true;
+                switch (mb.Restore()) {
+                    case HeroController:
+                        restoredHero = true;
+                        break;
+                    case VectorCurveAnimator animator:
+                        restoredCurveAnimators.Add(animator);
+                        break;
                 }
             }
             
@@ -630,6 +650,7 @@ public static class SavestateLogic {
                 AbsoluteTimeRebase.RebaseHero(HeroController.instance, delta);
             }
             AbsoluteTimeRebase.RebaseFsms(restoredFsms, delta);
+            AbsoluteTimeRebase.RebaseCurveAnimators(restoredCurveAnimators, delta);
         }
 
         timing?.Add("apply", applyTotal.ElapsedMilliseconds);

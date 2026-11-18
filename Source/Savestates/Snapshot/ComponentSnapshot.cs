@@ -30,16 +30,16 @@ public class ComponentSnapshot {
         }
     }
 
-    public bool Restore() {
+    public Component? Restore() {
         var targetComponent = ObjectUtils.LookupObjectComponentPath(Path);
         if (!targetComponent) {
             Log.Error($"Savestate stored state on {Path}, which does not exist at load time");
-            return false;
+            return null;
         }
 
         NormalizeCenterOfMass(targetComponent);
         SnapshotSerializer.Populate(targetComponent, Data);
 
-        return true;
+        return targetComponent;
     }
 }
