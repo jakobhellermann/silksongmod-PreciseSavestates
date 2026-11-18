@@ -13,6 +13,11 @@ public class AnimatorConverter : JsonConverter {
 
     public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer) {
         var animator = (Animator)value!;
+        if (!animator.enabled) {
+            new JObject { ["enabled"] = false }.WriteTo(writer);
+            return;
+        }
+
         var layers = new JArray();
         for (var i = 0; i < animator.layerCount; i++) {
             var state = animator.GetCurrentAnimatorStateInfo(i);
@@ -22,15 +27,20 @@ public class AnimatorConverter : JsonConverter {
             });
         }
 
-        new JObject { ["layers"] = layers }.WriteTo(writer);
+        new JObject { ["enabled"] = true, ["layers"] = layers }.WriteTo(writer);
     }
 
     public override object ReadJson(JsonReader reader, Type objectType, object? existingValue,
         JsonSerializer serializer) {
         var token = JToken.ReadFrom(reader);
         var animator = (Animator)existingValue!;
-        if (!animator.isActiveAndEnabled) {
+        if (!animator.gameObject.activeInHierarchy) {
             Log.Error($"Can't restore Animator state into inactive '{ObjectUtils.ObjectComponentPath(animator)}'");
+            return animator;
+        }
+
+        animator.enabled = token.Value<bool?>("enabled") ?? true;
+        if (!animator.enabled) {
             return animator;
         }
 

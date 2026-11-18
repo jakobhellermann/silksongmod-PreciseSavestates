@@ -236,7 +236,7 @@ public static class SavestateLogic {
 
             gameObjectSnapshots.AddRange(gameObjectTargets.Select(GameObjectSnapshot.Of));
             foreach (var animator in gameObjectTargets.SelectMany(go => go.GetComponents<Animator>())) {
-                if (animator.isActiveAndEnabled) {
+                if (animator.gameObject.activeInHierarchy) {
                     AddComponent(animator, "animator");
                 }
             }
