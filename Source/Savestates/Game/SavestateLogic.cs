@@ -250,7 +250,12 @@ public static class SavestateLogic {
 
             // skip prefab assets in FSM GameObject variables
             gameObjectTargets.RemoveWhere(go => !go.scene.IsValid());
-            gameObjectSnapshots.AddRange(gameObjectTargets.Select(GameObjectSnapshot.Of));
+            var spawnSources = PlayMakerFSM.FsmList
+                .Where(fsm => fsm && sceneNames.Contains(fsm.gameObject.scene.name))
+                .SelectMany(CreateObjectSpawn.In)
+                .GroupBy(s => s.spawned) // a FSM can spawn one prefab from several actions into the same variable (Gloom Beast's Gloomflies)
+                .ToDictionary(g => g.Key, g => SpawnSource.Of(g.Key, g.First().spawn));
+            gameObjectSnapshots.AddRange(gameObjectTargets.Select(go => GameObjectSnapshot.Of(go, spawnSources.GetValueOrDefault(go))));
             foreach (var animator in gameObjectTargets.SelectMany(go => go.GetComponents<Animator>())) {
                 if (animator.gameObject.activeInHierarchy) {
                     AddComponent(animator, "animator");
