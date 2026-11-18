@@ -25,6 +25,7 @@ public class PlayMakerFsmSnapshot {
     public required string Path;
     public required string FsmName;
     public required string ActiveState;
+    public FsmStateRuntime? ActiveStateRuntime;
     public required Dictionary<string, JToken> Variables;
     public required List<FsmActionSnapshot> Actions;
 
@@ -166,6 +167,7 @@ public class PlayMakerFsmSnapshot {
             Path = ObjectUtils.ObjectPath(owner),
             FsmName = fsm.Name,
             ActiveState = fsm.ActiveStateName,
+            ActiveStateRuntime = fsm.ActiveState is { } activeState ? FsmStateRuntime.Of(activeState) : null,
             Variables = variables,
             GameObjectVariables = gameObjectVariables,
             ObjectVariables = objectVariables,
@@ -306,6 +308,7 @@ public class PlayMakerFsmSnapshot {
         fsm.activeState = targetState;
         fsm.activeStateName = ActiveState;
         fsm.activeStateEntered = true;
+        ActiveStateRuntime?.RestoreInto(targetState);
 
         // OnEnter also builds the state's ActiveActions list (via ActivateActions) — the list FsmState.OnUpdate
         // iterates to run per-frame actions. Skipping OnEnter leaves it empty, so a restored state runs NO OnUpdate:
@@ -486,4 +489,29 @@ public class FsmActionSnapshot {
     public PlayMakerFsmSnapshot? SubFsm;
 
     public JToken? ITween;
+}
+
+public class FsmStateRuntime {
+    public int ActionIndex;
+    public float Time;
+    public float RealTime;
+    public bool Active;
+    public bool Finished;
+
+    public static FsmStateRuntime Of(FsmState state) => new() {
+        ActionIndex = state.activeActionIndex,
+        Time = state.StateTime,
+        RealTime = state.StateRealTime,
+        Active = state.active,
+        Finished = state.finished,
+    };
+
+    public void RestoreInto(FsmState state) {
+        state.activeActionIndex = ActionIndex;
+        state.StateTime = Time;
+        // relative to now, since the realtime clock differs between sessions
+        state.RealStartTime = FsmTime.RealtimeSinceStartup - RealTime;
+        state.active = Active;
+        state.finished = Finished;
+    }
 }
