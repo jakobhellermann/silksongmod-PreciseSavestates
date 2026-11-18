@@ -338,6 +338,10 @@ public class PlayMakerFsmSnapshot {
                     animatePositionBy.SetFieldValue("objectTransform",
                         fsm.GetOwnerDefaultTarget(animatePositionBy.gameObject)?.transform);
                 }
+                if (action is CheckOutOfCamera outOfCamera) {
+                    outOfCamera.targetTransform = fsm.GetOwnerDefaultTarget(outOfCamera.gameObject).transform;
+                    outOfCamera.camTransform = GameCameras.instance.mainCamera.transform;
+                }
                 if (action is CharacterCheckForBump bump) {
                     var target = fsm.GetOwnerDefaultTarget(bump.Target);
                     var checker = target.GetComponent<CharacterBumpCheck>() ?? target.AddComponent<CharacterBumpCheck>();
