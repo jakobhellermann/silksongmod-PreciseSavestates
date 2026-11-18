@@ -155,6 +155,12 @@ public static class SavestateLogic {
                                 AddComponent(ssrTarget.GetComponent<SpriteRenderer>(), "SetSpriteRenderer target");
                             }
                         }
+                        if (action is SetCollider setCollider
+                            && action.Fsm.GetOwnerDefaultTarget(setCollider.gameObject) is { } colliderTarget && colliderTarget) {
+                            foreach (var collider in colliderTarget.GetComponents<Collider2D>()) {
+                                AddComponent(collider, "SetCollider target");
+                            }
+                        }
                         if (action is CallMethodProper call
                             && action.Fsm.GetOwnerDefaultTarget(call.gameObject) is { } callTarget && callTarget
                             && sceneNames.Contains(callTarget.scene.name)) {
