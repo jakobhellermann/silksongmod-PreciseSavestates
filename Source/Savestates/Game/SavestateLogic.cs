@@ -169,7 +169,7 @@ public static class SavestateLogic {
                             // moved to the spawn point on each roar
                             AddComponent(emitter, "roar emitter transform");
                         }
-                        if (FsmTransformTargets.Of(action) is { } moved) {
+                        if (FsmTransformTargets.Of(action) is { } moved && moved) {
                             AddComponent(moved.transform, "fsm transform target");
                         }
                         if (action is FadeNestedFadeGroup fade) {

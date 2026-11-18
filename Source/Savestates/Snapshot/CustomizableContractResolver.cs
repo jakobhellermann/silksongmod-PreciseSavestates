@@ -188,8 +188,8 @@ public class CustomizableContractResolver : DefaultContractResolver {
                 }
 
                 return property.ValueProvider?.GetValue(instance) switch {
-                    Component c => c.gameObject.scene.IsValid(),
-                    GameObject g => g.scene.IsValid(),
+                    Component c => !c || c.gameObject.scene.IsValid(),
+                    GameObject g => !g || g.scene.IsValid(),
                     _ => true,
                 };
             };
@@ -215,7 +215,8 @@ internal class RefConverter(int dummy) : JsonConverter {
 
     internal static void WriteComponent(JsonWriter writer, Component component) {
         if (!component) {
-            throw new NotImplementedException("!component");
+            writer.WriteNull();
+            return;
         }
 
         References.Add(component);
@@ -223,7 +224,8 @@ internal class RefConverter(int dummy) : JsonConverter {
     }
 
     private static void WriteReference(JsonWriter writer, object? obj) {
-        if (obj == null) {
+        // a destroyed object equals null in Unity
+        if (obj == null || (obj is UnityEngine.Object unityObject && unityObject == null)) {
             writer.WriteNull();
             return;
         }
@@ -298,11 +300,7 @@ internal class RefConverter(int dummy) : JsonConverter {
             case Component component:
                 WriteComponent(writer, component);
                 break;
-            case GameObject go:
-                if (!go) {
-                    throw new NotImplementedException("!gameObject");
-                }
-
+            case GameObject:
                 WriteReference(writer, value);
                 break;
             case IEnumerable list:
