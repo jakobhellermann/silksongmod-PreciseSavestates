@@ -351,6 +351,7 @@ public static class SavestateLogic {
             // TODO: is this still necessary here? check SceneAdditiveLoadConditional encounteredSongGolem
             if (savestate.PlayerData is { } earlyPlayerData) {
                 JsonUtility.FromJsonOverwrite(earlyPlayerData.ToString(), global::PlayerData.instance);
+                InvalidatePlayerDataCaches();
             }
 
             // Unload additive scenes, for same-scene reloads (wouldn't be unloaded by vanilla)
@@ -438,6 +439,7 @@ public static class SavestateLogic {
 
             if (savestate.PlayerData is { } playerData) {
                 JsonUtility.FromJsonOverwrite(playerData.ToString(), PlayerData.instance);
+                InvalidatePlayerDataCaches();
             }
 
             if (savestate.SceneData is { } sceneData) {
@@ -623,5 +625,12 @@ public static class SavestateLogic {
         }
 
         timing?.Add("apply", applyTotal.ElapsedMilliseconds);
+    }
+
+    // clear PlayerData caches
+    private static void InvalidatePlayerDataCaches() {
+        QuestManager.IncrementVersion();
+        CollectableItemManager.IncrementVersion();
+        ToolItemManager.IncrementVersion();
     }
 }
