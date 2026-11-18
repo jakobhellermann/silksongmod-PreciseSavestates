@@ -242,6 +242,8 @@ public static class SavestateLogic {
 
             gameObjectTargets.UnionWith(enemies.Select(hm => hm.gameObject));
 
+            // skip prefab assets in FSM GameObject variables
+            gameObjectTargets.RemoveWhere(go => !go.scene.IsValid());
             gameObjectSnapshots.AddRange(gameObjectTargets.Select(GameObjectSnapshot.Of));
             foreach (var animator in gameObjectTargets.SelectMany(go => go.GetComponents<Animator>())) {
                 if (animator.gameObject.activeInHierarchy) {
