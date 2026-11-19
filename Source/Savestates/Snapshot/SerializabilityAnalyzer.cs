@@ -6,7 +6,7 @@ namespace PreciseSavestates.Savestates;
 
 // Classes are deserialized in place, updating the current object. That way, partial snapshots are supported
 // and leave the unsnapshotted values in place.
-// In collections however, you cannot in-place deserialize, since the original entries are replaced entirely.
+// Collection entries and structs however are replaced entirely, so they can't be partially deserialized.
 internal static class SerializabilityAnalyzer {
     // True if reconstructing `type` from scratch would lose content, since the type contains unserializable values
     public static bool HasUnserializableContent(

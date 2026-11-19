@@ -96,8 +96,14 @@ public class CustomizableContractResolver : DefaultContractResolver {
 
     private bool IgnorePropertyType(Type? type) {
         return Array.Exists(ExactFieldTypesToIgnore, x => x == type) ||
-               Array.Exists(FieldTypesToIgnore, x => x.IsAssignableFrom(type));
+               Array.Exists(FieldTypesToIgnore, x => x.IsAssignableFrom(type)) ||
+               IsAsset(type);
     }
+
+    // assets have no ref path; by value they come back as empty managed shells replacing the real asset
+    private static bool IsAsset(Type? type) =>
+        type != null && typeof(UnityEngine.Object).IsAssignableFrom(type) && !typeof(Component).IsAssignableFrom(type)
+        && type != typeof(GameObject);
 
     // Returns true if reconstructing `type` from scratch inside a collection would lose data
     private bool HasUnserializableContent(Type type) {
@@ -187,7 +193,9 @@ public class CustomizableContractResolver : DefaultContractResolver {
             shouldSerialize = false;
         }
 
-        if (shouldSerialize && isCollection && HasUnserializableContent(itemType)) {
+        // structs are replaced like collection items, so their unserializable members would reset to default
+        var isStruct = !isCollection && type.IsValueType && !type.IsPrimitive && !type.IsEnum;
+        if (shouldSerialize && (isCollection || isStruct) && HasUnserializableContent(itemType)) {
             shouldSerialize = false;
             Log.Warning(
                 $"Auto-skipping {member.DeclaringType?.Name}.{member.Name}: {itemType.Name} has unserializable members");

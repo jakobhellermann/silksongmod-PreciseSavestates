@@ -33,24 +33,20 @@ public static class GameSpecific {
             typeof(PositionConstraint),
             typeof(TextMeshProUGUI),
             typeof(TMP_Text),
-            typeof(Sprite),
             typeof(Tilemap),
             typeof(LineRenderer),
             typeof(Color),
             typeof(ParticleSystem),
             typeof(AnimationCurve),
-            typeof(AnimationClip),
             typeof(Rect),
+            // authored audio config (clip + pitch/volume), never written at runtime
+            typeof(AudioEvent),
             // runtime-attached by OnEnter, never restorable state
             typeof(PlayMakerUnity2DProxy),
             typeof(iTweenFSMEvents),
             // todo
-            typeof(RenderTexture),
-            typeof(Texture2D),
-            typeof(Texture3D),
             typeof(SpriteRenderer), // maybe
             typeof(LayerMask), // maybe
-            typeof(ScriptableObject),
             // handled via dedicated snapshot, ignore fsm and backreferences
             typeof(Fsm),
             typeof(FsmState),
@@ -91,8 +87,8 @@ public static class GameSpecific {
             },
             {
                 typeof(HeroAnimationController),
-                // pd/cState are references to HeroController; audioclips
-                ["pd", "cState", "wakeUpGround1", "wakeUpGround2", "wakeUpGroundCloakless", "backflipSpin"]
+                // pd/cState are references to HeroController
+                ["pd", "cState"]
             },
             { typeof(HeroController), [
                 // restored separately
@@ -109,11 +105,14 @@ public static class GameSpecific {
             // --- explicit denylisted "skip unserializable type" warnings ---
             // authored drop config, only read when breaking
             { typeof(Breakable), [nameof(Breakable.itemDropGroups)] },
+            // Addressables load handle, never restorable
+            { typeof(TransitionPoint), [nameof(TransitionPoint.targetSceneResourceHandle)] },
             { typeof(RunEffects), [nameof(RunEffects.runTypes)] },
             { typeof(InputHandler), [nameof(InputHandler.MappableControllerActions), nameof(InputHandler.MappableKeyboardActions)] },
             { typeof(HeroVibrationController), [nameof(HeroVibrationController.audioClipVibrations), nameof(HeroVibrationController.emissions)] },
             { typeof(SpriteFlash), [nameof(SpriteFlash.repeatingFlashes)] },
-            { typeof(GameManager), [nameof(GameManager.skippables)] },
+            // skippables: re-registered on enable; the handles: Addressables loads, never restorable
+            { typeof(GameManager), [nameof(GameManager.skippables), nameof(GameManager.globalPoolPrefabHandle), nameof(GameManager.heroPrefabHandle)] },
             {
                 typeof(DamageEnemies),
                 [
