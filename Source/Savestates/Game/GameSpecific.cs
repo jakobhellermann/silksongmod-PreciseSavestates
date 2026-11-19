@@ -124,7 +124,11 @@ public static class GameSpecific {
                 ]
             },
             { typeof(tk2dTileMap), [nameof(tk2dTileMap.layers), nameof(tk2dTileMap.tilePrefabsList)] },
-            { typeof(HealthManager), [nameof(HealthManager.itemDropGroups), nameof(HealthManager._itemDrops)] },
+            // physicalPusher: instantiated by the enemy itself, the fresh one has its own
+            { typeof(HealthManager), [nameof(HealthManager.itemDropGroups), nameof(HealthManager._itemDrops), nameof(HealthManager.physicalPusher)] },
+            // handle to the pooled one-shot player, only kept to stop it
+            { typeof(PlayRandomAudioEvent), [nameof(PlayRandomAudioEvent.spawnedAudioSource)] },
+            { typeof(PlayAudioEventBase), [nameof(PlayAudioEventBase.spawnedAudioSource)] },
             { typeof(EnemyDeathEffects), [nameof(EnemyDeathEffects.altCorpses), "deathSounds"] },
             { typeof(EventRelayResponder), [nameof(EventRelayResponder.responses)] },
             { typeof(CallMethodProper), [nameof(CallMethodProper.parameters)] },
