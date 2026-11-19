@@ -89,6 +89,7 @@ public static class SavestateLogic {
             if (cameraCtrl) {
                 AddComponent(cameraCtrl.transform, "camera transform");
                 AddComponent(cameraCtrl, "cameraCtrl");
+                AddComponent(CameraBlurPlane._instance, "camera blur plane");
                 var mainCamera = GameCameras.instance;
                 AddComponent(mainCamera.transform, "mainCamera.transform");
 

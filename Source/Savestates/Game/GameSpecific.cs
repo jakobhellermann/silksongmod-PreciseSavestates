@@ -15,7 +15,7 @@ using Object = UnityEngine.Object;
 namespace PreciseSavestates.Savestates.Game;
 
 public static class GameSpecific {
-    public static IReadOnlyList<JsonConverter> ExtraConverters { get; } = [new Tk2dAnimatorConverter(), new AnimatorConverter(), new Tk2dClipConverter(), new RaycastHit2DConverter(), new ParticleSystemConverter()];
+    public static IReadOnlyList<JsonConverter> ExtraConverters { get; } = [new Tk2dAnimatorConverter(), new AnimatorConverter(), new Tk2dClipConverter(), new RaycastHit2DConverter(), new ParticleSystemConverter(), new CameraBlurPlaneConverter()];
 
     public static CustomizableContractResolver Resolver => new() {
         ContainerTypesToIgnore = [
