@@ -130,9 +130,18 @@ public static class SavestateLogic {
             foreach (var fsm in persistentFsms) {
                 CaptureFsm(fsm);
             }
+            
+            // the hero FSMs' states are already captured with the player, this adds the objects they toggle
+            if (filter.HasFlag(SavestateFilter.Player)) {
+                foreach (var fsm in player.GetComponents<PlayMakerFSM>()) {
+                    CaptureFsm(fsm, snapshotState: false);
+                }
+            }
 
-            void CaptureFsm(PlayMakerFSM fsm) {
-                fsmSnapshots.Add(PlayMakerFsmSnapshot.Of(fsm));
+            void CaptureFsm(PlayMakerFSM fsm, bool snapshotState = true) {
+                if (snapshotState) {
+                    fsmSnapshots.Add(PlayMakerFsmSnapshot.Of(fsm));
+                }
 
                 var go = fsm.gameObject;
                 gameObjectTargets.Add(go);
@@ -143,6 +152,8 @@ public static class SavestateLogic {
                         var ownerDefault = action switch {
                             ActivateGameObject a => a.gameObject,
                             ActivateGameObjectDelay a => a.gameObject,
+                            // the animation whose event it waits for
+                            ListenForAnimationEvent a => a.Target,
                             _ => null,
                         };
                         if (action is SetMeshRenderer smr) {

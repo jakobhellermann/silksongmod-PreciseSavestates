@@ -57,6 +57,8 @@ public class PlayMakerFsmSnapshot {
         // FaceObjectV2: OnEnter caches a raw GameObject (objectA_object) + _sprite, dereferenced every OnUpdate →
         // restore-without-OnEnter NRE. (self-based AI actions use RestoreSelf; their component caches round-trip as $refs.)
         typeof(FaceObjectV2),
+        // OnEnter only subscribes to the target's CaptureAnimationEvent
+        typeof(ListenForAnimationEvent),
     ];
 
     // Safely ignorable unsaved fsm variables
