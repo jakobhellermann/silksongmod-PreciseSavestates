@@ -22,10 +22,10 @@ public class CoroutineSnapshot {
     public float Wait;
     public float Remaining;
 
-    // the arena's start pause and its waves' start delays
     private static readonly MethodInfo[] registered = [
         AccessTools.Method(typeof(BattleScene), nameof(BattleScene.DoStartBattle)),
         AccessTools.Method(typeof(BattleScene), nameof(BattleScene.StartWave)),
+        AccessTools.Method(typeof(BattleScene), nameof(BattleScene.EndBattle)),
     ];
 
     private static readonly Dictionary<Type, MethodInfo> iteratorMethods =
