@@ -188,6 +188,8 @@ public class PlayMakerFsmSnapshot {
                     objectVariables[v.Name] = null;
                 } else if (obj is Component comp) {
                     objectVariables[v.Name] = ObjectUtils.ObjectComponentPath(comp);
+                } else if (obj is GameObject go && go.scene.IsValid()) {
+                    // only ever authored, the live FSM holds it already; runtime writes carry components or assets
                 } else if (!dropWarnSilenced.Contains((fsm.Name, v.Name))) {
                     Log.Warning($"Not capturing FSM asset variable {ObjectUtils.ObjectPath(owner)}/"
                                 + $"{fsm.Name}.{v.Name} ({obj.GetType().Name})");
