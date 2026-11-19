@@ -257,6 +257,20 @@ public static class SavestateLogic {
                 .SelectMany(CreateObjectSpawn.In)
                 .GroupBy(s => s.spawned) // a FSM can spawn one prefab from several actions into the same variable (Gloom Beast's Gloomflies)
                 .ToDictionary(g => g.Key, g => SpawnSource.Of(g.Key, g.First().spawn));
+
+            // before the other snapshots, whose paths may go through a reparented object and only resolve once it moved
+            foreach (var (detached, reparent) in sceneNames.Select(SceneManager.GetSceneByName).SelectMany(FlingChildrenReparent.In)) {
+                gameObjectSnapshots.Add(GameObjectSnapshot.Of(detached, reparent: new ReparentSource { FlingChildren = reparent }));
+                gameObjectTargets.Remove(detached);
+
+                AddComponent(detached.transform, "reparented transform");
+
+                foreach (var rb in detached.GetComponentsInChildren<Rigidbody2D>()) {
+                    AddComponent(rb, "reparented rigidbody");
+                    AddComponent(rb.transform, "reparented rigidbody transform");
+                }
+            }
+            
             gameObjectSnapshots.AddRange(gameObjectTargets.Select(go => GameObjectSnapshot.Of(go, spawnSources.GetValueOrDefault(go))));
             foreach (var animator in gameObjectTargets.SelectMany(go => go.GetComponents<Animator>())) {
                 if (animator.gameObject.activeInHierarchy) {
