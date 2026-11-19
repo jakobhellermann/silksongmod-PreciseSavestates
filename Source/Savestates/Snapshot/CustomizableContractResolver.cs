@@ -81,6 +81,19 @@ public class CustomizableContractResolver : DefaultContractResolver {
         return base.CreateContract(objectType);
     }
 
+    // RefConverter only writes a path, so a component referencing itself (ResetDynamicHierarchy) is okay.
+    protected override JsonObjectContract CreateObjectContract(Type objectType) {
+        var contract = base.CreateObjectContract(objectType);
+        if (contract.Properties.Any(p => p.Converter is RefConverter)) {
+            contract.ItemReferenceLoopHandling = ReferenceLoopHandling.Serialize;
+            foreach (var property in contract.Properties.Where(p => p.Converter is not RefConverter)) {
+                property.ReferenceLoopHandling ??= ReferenceLoopHandling.Error;
+            }
+        }
+
+        return contract;
+    }
+
     private bool IgnorePropertyType(Type? type) {
         return Array.Exists(ExactFieldTypesToIgnore, x => x == type) ||
                Array.Exists(FieldTypesToIgnore, x => x.IsAssignableFrom(type));
