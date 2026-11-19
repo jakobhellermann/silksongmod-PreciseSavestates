@@ -97,8 +97,13 @@ public class CustomizableContractResolver : DefaultContractResolver {
     private bool IgnorePropertyType(Type? type) {
         return Array.Exists(ExactFieldTypesToIgnore, x => x == type) ||
                Array.Exists(FieldTypesToIgnore, x => x.IsAssignableFrom(type)) ||
-               IsAsset(type);
+               IsAsset(type) ||
+               IsNativeArray(type);
     }
+
+    // a native memory buffer like IntPtr
+    private static bool IsNativeArray(Type? type) =>
+        type is { IsGenericType: true } && type.GetGenericTypeDefinition() == typeof(Unity.Collections.NativeArray<>);
 
     // assets have no ref path; by value they come back as empty managed shells replacing the real asset
     private static bool IsAsset(Type? type) =>

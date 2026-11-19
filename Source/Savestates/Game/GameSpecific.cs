@@ -125,6 +125,8 @@ public static class GameSpecific {
             { typeof(tk2dTileMap), [nameof(tk2dTileMap.layers), nameof(tk2dTileMap.tilePrefabsList)] },
             // physicalPusher: instantiated by the enemy itself, the fresh one has its own
             { typeof(HealthManager), [nameof(HealthManager.itemDropGroups), nameof(HealthManager._itemDrops), nameof(HealthManager.physicalPusher)] },
+            // recomputed from the control points / widthCurve on every mesh update
+            { typeof(TeamCherry.Splines.SplineBase), ["InternalPoints", "jobWidthCurve"] },
             // handle to the pooled one-shot player, only kept to stop it
             { typeof(PlayRandomAudioEvent), [nameof(PlayRandomAudioEvent.spawnedAudioSource)] },
             { typeof(PlayAudioEventBase), [nameof(PlayAudioEventBase.spawnedAudioSource)] },
