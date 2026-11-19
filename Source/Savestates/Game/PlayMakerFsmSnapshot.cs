@@ -411,11 +411,13 @@ public class PlayMakerFsmSnapshot {
         }
     }
 
-    // 24 actions cache a `FsmGameObject self` with the same pattern
+    // 24 actions cache their owner target as `FsmGameObject self`, 12 as `target`
     private void RestoreSelf(FsmStateAction action) {
         var type = action.GetType();
-        if (type.GetFieldInfo("self", logFailure: false) is not { } selfField
+        if ((type.GetFieldInfo("self", logFailure: false) ?? type.GetFieldInfo("target", logFailure: false)) is not { } selfField
             || selfField.FieldType != typeof(FsmGameObject)
+            // a public target is the action's parameter (GetDistance, ChaseObject), not the cache
+            || !selfField.IsPrivate
             || type.GetFieldInfo("gameObject", logFailure: false)?.GetValue(action) is not FsmOwnerDefault owner) {
             return;
         }
