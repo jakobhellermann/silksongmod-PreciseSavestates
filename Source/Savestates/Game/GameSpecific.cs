@@ -45,7 +45,6 @@ public static class GameSpecific {
             typeof(PlayMakerUnity2DProxy),
             typeof(iTweenFSMEvents),
             // todo
-            typeof(Transform), // maybe
             typeof(RenderTexture),
             typeof(Texture2D),
             typeof(Texture3D),

@@ -333,18 +333,7 @@ public class PlayMakerFsmSnapshot {
                 if (action is EaseFsmAction ease) {
                     ease.SetEasingFunction();
                 }
-                // OnEnter caches the moved transform (a Component, not captured); rerunning it would restart the move
-                if (action is AnimatePositionBy animatePositionBy) {
-                    animatePositionBy.SetFieldValue("objectTransform",
-                        fsm.GetOwnerDefaultTarget(animatePositionBy.gameObject)?.transform);
-                }
-                if (action is AnimatePositionTo animatePositionTo) {
-                    animatePositionTo.objectTransform = fsm.GetOwnerDefaultTarget(animatePositionTo.gameObject).transform;
-                }
-                if (action is CheckOutOfCamera outOfCamera) {
-                    outOfCamera.targetTransform = fsm.GetOwnerDefaultTarget(outOfCamera.gameObject).transform;
-                    outOfCamera.camTransform = GameCameras.instance.mainCamera.transform;
-                }
+                // OnEnter adds the component when missing, so a $ref to it can't resolve in a freshly loaded scene
                 if (action is CharacterCheckForBump bump) {
                     var target = fsm.GetOwnerDefaultTarget(bump.Target);
                     var checker = target.GetComponent<CharacterBumpCheck>() ?? target.AddComponent<CharacterBumpCheck>();
