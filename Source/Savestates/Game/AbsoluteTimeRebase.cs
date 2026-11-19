@@ -78,6 +78,12 @@ public static class AbsoluteTimeRebase {
         }
     }
 
+    public static void RebaseBreakables(IEnumerable<Breakable> breakables, double delta) {
+        foreach (var breakable in breakables) {
+            breakable.hitCooldownEndTime += delta;
+        }
+    }
+
     public static void RebaseCurveAnimators(IEnumerable<VectorCurveAnimator> animators, double delta) {
         foreach (var animator in animators) {
             animator.nextUpdateTime += delta;

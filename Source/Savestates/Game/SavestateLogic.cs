@@ -117,7 +117,7 @@ public static class SavestateLogic {
             var sceneNames = new HashSet<string> { gm.sceneName };
             sceneNames.UnionWith(additiveScenes);
             coroutineSnapshots = CoroutineSnapshot.Of(go => sceneNames.Contains(go.scene.name));
-            
+
             var seenFsmObjects = new HashSet<GameObject>();
             var gameObjectTargets = new HashSet<GameObject>();
             // persistent FSMs driven by scene FSM actions
@@ -130,7 +130,7 @@ public static class SavestateLogic {
             foreach (var fsm in persistentFsms) {
                 CaptureFsm(fsm);
             }
-            
+
             // the hero FSMs' states are already captured with the player, this adds the objects they toggle
             if (filter.HasFlag(SavestateFilter.Player)) {
                 foreach (var fsm in player.GetComponents<PlayMakerFSM>()) {
@@ -239,11 +239,16 @@ public static class SavestateLogic {
                 }
             }
 
-            foreach (var breakable in SceneComponents<Breakable>().Where(b => b.IsBroken)) {
+            foreach (var breakable in SceneComponents<Breakable>().Where(b => b.IsBroken || b.hitsLeft != b.hitsToBreak)) {
                 AddComponent(breakable, "breakable");
-                AddComponent(breakable.GetComponent<Collider2D>(), "breakable collider");
-                gameObjectTargets.UnionWith(breakable.wholeParts.Where(go => go));
-                gameObjectTargets.UnionWith(breakable.remnantParts.Where(go => go));
+                if (breakable.IsBroken) {
+                    AddComponent(breakable.GetComponent<Collider2D>(), "breakable collider");
+                    gameObjectTargets.UnionWith(breakable.wholeParts.Where(go => go));
+                    gameObjectTargets.UnionWith(breakable.remnantParts.Where(go => go));
+                } else {
+                    // toggled by hits on silk breakables
+                    gameObjectTargets.UnionWith(new[] { breakable.silkDropsCondition, breakable.threadThinObject }.Where(go => go));
+                }
             }
 
             foreach (var battleScene in UnityEngine.Object.FindObjectsByType<BattleScene>(FindObjectsInactive.Include,
@@ -281,7 +286,7 @@ public static class SavestateLogic {
                     AddComponent(rb.transform, "reparented rigidbody transform");
                 }
             }
-            
+
             gameObjectSnapshots.AddRange(gameObjectTargets.Select(go => GameObjectSnapshot.Of(go, spawnSources.GetValueOrDefault(go))));
             foreach (var ps in gameObjectTargets.Where(go => go.activeInHierarchy).SelectMany(go => go.GetComponentsInChildren<ParticleSystem>())) {
                 AddComponent(ps, "particle system");
@@ -415,7 +420,7 @@ public static class SavestateLogic {
             }
 
             // Unload additive scenes, for same-scene reloads (wouldn't be unloaded by vanilla)
-            // TODO: reuse more game code? 
+            // TODO: reuse more game code?
             // TODO: don't leak addressables bundle ref
             var activeScene = SceneManager.GetActiveScene();
             var subScenes = new List<Scene>();
@@ -436,11 +441,11 @@ public static class SavestateLogic {
 
             timing.Mark("unload");
             ScenePhaseTiming.Reset();
-            
+
             // Skip full GC (40% of reload time)
             var wasManualCollectDisabled = GCManager.DisabledManualCollect;
             GCManager.DisabledManualCollect = true;
-            
+
             sceneLoadedSource = new TaskCompletionSource<bool>();
             SceneManager.sceneLoaded += OnSceneLoaded;
             try {
@@ -586,7 +591,8 @@ public static class SavestateLogic {
         var restoredFsms = new List<PlayMakerFSM>();
         var restoredHero = false;
         var restoredCurveAnimators = new List<VectorCurveAnimator>();
-        
+        var restoredBreakables = new List<Breakable>();
+
         if (savestate.GameObjectSnapshots != null) {
             foreach (var go in savestate.GameObjectSnapshots) {
                 go.Restore();
@@ -617,16 +623,19 @@ public static class SavestateLogic {
                     case VectorCurveAnimator animator:
                         restoredCurveAnimators.Add(animator);
                         break;
+                    case Breakable breakable:
+                        restoredBreakables.Add(breakable);
+                        break;
                 }
             }
-            
+
             // In order to make collision trigger enter/exit events stable, load the rigidbody positions first and perform
             // a Physics.Simulate step in place.
             var prevSimulationMode = Physics2D.simulationMode;
             Physics2D.simulationMode = SimulationMode2D.Script;
             Physics2D.Simulate(0f);
             Physics2D.simulationMode = prevSimulationMode;
-            
+
             Log.Info($"- Applied snapshots in {sw.ElapsedMilliseconds}ms");
         }
 
@@ -693,6 +702,7 @@ public static class SavestateLogic {
             }
             AbsoluteTimeRebase.RebaseFsms(restoredFsms, delta);
             AbsoluteTimeRebase.RebaseCurveAnimators(restoredCurveAnimators, delta);
+            AbsoluteTimeRebase.RebaseBreakables(restoredBreakables, delta);
         }
 
         timing?.Add("apply", applyTotal.ElapsedMilliseconds);

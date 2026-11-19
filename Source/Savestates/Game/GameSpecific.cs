@@ -107,6 +107,8 @@ public static class GameSpecific {
             // Skipping it recomputes the cache.
             { typeof(CallStaticMethod), [nameof(CallStaticMethod.cachedClassName), nameof(CallStaticMethod.cachedMethodName), nameof(CallStaticMethod.parameters)] },
             // --- explicit denylisted "skip unserializable type" warnings ---
+            // authored drop config, only read when breaking
+            { typeof(Breakable), [nameof(Breakable.itemDropGroups)] },
             { typeof(RunEffects), [nameof(RunEffects.runTypes)] },
             { typeof(InputHandler), [nameof(InputHandler.MappableControllerActions), nameof(InputHandler.MappableKeyboardActions)] },
             { typeof(HeroVibrationController), [nameof(HeroVibrationController.audioClipVibrations), nameof(HeroVibrationController.emissions)] },
