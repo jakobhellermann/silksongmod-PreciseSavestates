@@ -677,6 +677,8 @@ public static class SavestateLogic {
             savestate.Music?.RestoreAfterSceneAudio();
             HudFixes.RefreshHealthHud();
             HudFixes.RefreshSilkHud();
+            // skip the 0.25s scene fade-in
+            ScreenFaderUtils.Fade(Color.clear, Color.clear, 0f);
         }
 
         if (rebaseTimes) {
