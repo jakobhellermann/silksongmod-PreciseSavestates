@@ -272,6 +272,9 @@ public static class SavestateLogic {
             }
             
             gameObjectSnapshots.AddRange(gameObjectTargets.Select(go => GameObjectSnapshot.Of(go, spawnSources.GetValueOrDefault(go))));
+            foreach (var ps in gameObjectTargets.Where(go => go.activeInHierarchy).SelectMany(go => go.GetComponentsInChildren<ParticleSystem>())) {
+                AddComponent(ps, "particle system");
+            }
             foreach (var animator in gameObjectTargets.SelectMany(go => go.GetComponents<Animator>())) {
                 if (animator.gameObject.activeInHierarchy) {
                     AddComponent(animator, "animator");
