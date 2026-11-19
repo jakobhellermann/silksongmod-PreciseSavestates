@@ -196,6 +196,9 @@ public class CustomizableContractResolver : DefaultContractResolver {
         } else {
             property.ShouldSerialize = _ => shouldSerialize;
         }
+        if (!shouldSerialize) {
+            property.ShouldDeserialize = _ => false;
+        }
 
         return property;
     }

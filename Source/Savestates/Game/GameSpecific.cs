@@ -61,7 +61,8 @@ public static class GameSpecific {
             typeof(MemberInfo),
             typeof(ParameterInfo),
         ],
-        ExactFieldTypesToIgnore = [typeof(Component)],
+        // native handles (MaterialPropertyBlock.m_Ptr, ...) dangle hen owner is destroyed by scene reload
+        ExactFieldTypesToIgnore = [typeof(Component), typeof(IntPtr), typeof(UIntPtr)],
         FieldAllowlist = new Dictionary<Type, string[]> {
             { typeof(Transform), [nameof(Transform.localPosition), nameof(Transform.localRotation), nameof(Transform.localScale)] },
             { typeof(Rigidbody2D), [nameof(Rigidbody2D.position), nameof(Rigidbody2D.linearVelocity), nameof(Rigidbody2D.gravityScale), nameof(Rigidbody2D.bodyType)] },
