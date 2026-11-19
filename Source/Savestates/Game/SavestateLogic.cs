@@ -78,7 +78,7 @@ public static class SavestateLogic {
             AddComponent(player.heroBox, "player.heroBox");
             AddComponent(player.AnimCtrl?.animator, "player animator");
 
-            foreach (var fsm in player.GetComponents<PlayMakerFSM>()) {
+            foreach (var fsm in HeroFsms(player)) {
                 fsmSnapshots.Add(PlayMakerFsmSnapshot.Of(fsm));
             }
 
@@ -134,7 +134,7 @@ public static class SavestateLogic {
 
             // the hero FSMs' states are already captured with the player, this adds the objects they toggle
             if (filter.HasFlag(SavestateFilter.Player)) {
-                foreach (var fsm in player.GetComponents<PlayMakerFSM>()) {
+                foreach (var fsm in HeroFsms(player)) {
                     CaptureFsm(fsm, snapshotState: false);
                 }
             }
@@ -537,6 +537,9 @@ public static class SavestateLogic {
         GameManager.instance.GetComponent<UpdateBatcher>().lateUpdates.List
             .OfType<VectorCurveAnimator>()
             .SelectMany(a => a.GetComponents<VectorCurveAnimator>());
+
+    private static IEnumerable<PlayMakerFSM> HeroFsms(HeroController player) =>
+        player.GetComponents<PlayMakerFSM>().Append(player.vignetteFSM);
 
     private static IEnumerable<T> SceneComponents<T>() where T : Component {
         for (var i = 0; i < SceneManager.sceneCount; i++) {
