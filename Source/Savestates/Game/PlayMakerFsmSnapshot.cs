@@ -89,6 +89,15 @@ public class PlayMakerFsmSnapshot {
         ("interactive_bell", "Strike Clip"),
         // authored cost asset, only passed into the RunFSM template
         ("Unlock Behaviour", "Cost Reference"),
+        // harpoon rings: never written / tables picked from the authored Type right after Init; null-safe, audio only
+        ("Control", "Strike Audio"),
+        ("Control", "Connect Audio Table"),
+        ("Control", "Shake Audio Table"),
+        // set a frame after start per ability, so a restore may lose it; null-safe, skips only the mixer transition
+        ("Inspection", "Start Atmos Snapshot"),
+        ("Inspection", "End Atmos Snapshot"),
+        // declared but never used (Understore Heavy)
+        ("Behaviour", "Protect Tracking Array"),
     ];
 
     private static bool IsSerializableVariable(VariableType type) {
