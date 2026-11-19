@@ -63,7 +63,7 @@ public class Savestate {
         ContractResolver = new ForceSerializeResolver {
             ForceSerializePropertiesOf = [typeof(Random.State)],
         },
-        Converters = [new Vector3Converter()],
+        Converters = [new Vector3Converter(), new QuaternionConverter()],
     };
 
     private class ForceSerializeResolver : DefaultContractResolver {
