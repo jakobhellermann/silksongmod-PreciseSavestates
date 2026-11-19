@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using HarmonyLib;
+using PreciseSavestates.Savestates.Game;
 using PreciseSavestates.Source;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -17,18 +18,24 @@ public static class ObjectUtils {
     private static Scene MainScene => SceneManager.GetSceneByName(GameManager.instance.sceneName);
 
     public static string ObjectPath(GameObject obj) {
-        List<string> segments = [];
-        for (var current = obj; current != null; current = current.transform.parent?.gameObject) {
-            segments.Add(current.name);
-        }
-
-        segments.Reverse();
-        var path = segments.Join(delimiter: "/");
-
+        var path = HierarchyPath(obj.transform);
         var scene = obj.scene;
         return scene.IsValid() && scene != MainScene && scene != DontDestroyScene
             ? scene.name + SceneSeparator + path
             : path;
+    }
+
+    internal static string HierarchyPath(Transform transform) {
+        List<string> segments = [];
+        var current = transform;
+        while (current != null) {
+            segments.Add(current.name);
+            var parent = current.parent;
+            current = parent != null ? parent : DetachedRoots.OriginalParent(current);
+        }
+
+        segments.Reverse();
+        return segments.Join(delimiter: "/");
     }
 
     [return: NotNullIfNotNull(nameof(component))]
@@ -97,7 +104,8 @@ public static class ObjectUtils {
 
     public static GameObject? LookupPath(Scene scene, string path) {
         var rootObjects = scene.GetRootGameObjects();
-        return GetGameObjectFromArray(rootObjects, path);
+        var obj = GetGameObjectFromArray(rootObjects, path);
+        return obj != null ? obj : DetachedRoots.Lookup(scene, path);
     }
 
 
@@ -117,7 +125,11 @@ public static class ObjectUtils {
         }
 
         // Get root object
-        var obj = objects.FirstOrDefault(o => o.name == rootName);
+        // detached roots are addressed through their original parent
+        var obj = objects.FirstOrDefault(o => o.name == rootName && !DetachedRoots.IsDetached(o.transform));
+        if (obj == null) {
+            obj = objects.FirstOrDefault(o => o.name == rootName);
+        }
         if (obj is null) {
             return null;
         }
