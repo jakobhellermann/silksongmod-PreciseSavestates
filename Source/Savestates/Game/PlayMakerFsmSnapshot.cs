@@ -106,6 +106,51 @@ public class PlayMakerFsmSnapshot {
             or VariableType.Color or VariableType.Rect or VariableType.Quaternion or VariableType.Enum;
     }
 
+    // FsmArray keeps a typed store and a boxed cache that actions write separately (SendRandomEventFair only the
+    // store, Set only the cache), so both are captured as they are
+    private static JObject SnapshotArray(FsmArray array) => new() {
+        ["store"] = SnapshotSerializer.Snapshot(ArrayStore(array)),
+        ["values"] = array.values == null ? JValue.CreateNull() : SnapshotSerializer.Snapshot(array.values),
+    };
+
+    private static void RestoreArray(FsmArray array, JObject token) {
+        var store = token["store"]!;
+        switch (array.ElementType) {
+            case VariableType.Float: array.floatValues = store.ToObject<float[]>(); break;
+            case VariableType.Int or VariableType.Enum: array.intValues = store.ToObject<int[]>(); break;
+            case VariableType.Bool: array.boolValues = store.ToObject<bool[]>(); break;
+            case VariableType.String: array.stringValues = store.ToObject<string[]>(); break;
+            default: array.vector4Values = (Vector4[])SnapshotSerializer.Deserialize(store, typeof(Vector4[]))!; break;
+        }
+
+        if (token["values"] is not JArray values) {
+            array.values = null;
+            return;
+        }
+        var elementType = array.ElementType switch {
+            VariableType.Float => typeof(float),
+            VariableType.Int => typeof(int),
+            VariableType.Bool => typeof(bool),
+            VariableType.String => typeof(string),
+            VariableType.Vector2 => typeof(Vector2),
+            VariableType.Vector3 => typeof(Vector3),
+            VariableType.Color => typeof(Color),
+            VariableType.Rect => typeof(Rect),
+            VariableType.Quaternion => typeof(Quaternion),
+            VariableType.Enum => array.ObjectType,
+            var other => throw new NotSupportedException($"FsmArray element type {other}"),
+        };
+        array.values = values.Select(value => SnapshotSerializer.Deserialize(value, elementType)).ToArray();
+    }
+
+    private static Array ArrayStore(FsmArray array) => array.ElementType switch {
+        VariableType.Float => array.floatValues ?? [],
+        VariableType.Int or VariableType.Enum => array.intValues ?? [],
+        VariableType.Bool => array.boolValues ?? [],
+        VariableType.String => array.stringValues ?? [],
+        _ => array.vector4Values ?? [],
+    };
+
     public static PlayMakerFsmSnapshot Of(PlayMakerFSM fsmComponent) => Of(fsmComponent.Fsm, fsmComponent.gameObject);
 
     private static PlayMakerFsmSnapshot Of(Fsm fsm, GameObject owner) {
@@ -124,6 +169,8 @@ public class PlayMakerFsmSnapshot {
                 }
 
                 variables[v.Name] = raw == null ? JValue.CreateNull() : SnapshotSerializer.Snapshot(raw);
+            } else if (v is FsmArray array && IsSerializableVariable(array.ElementType)) {
+                variables[v.Name] = SnapshotArray(array);
             } else if (v.VariableType == VariableType.GameObject) {
                 GameObject? target;
                 try {
@@ -233,7 +280,9 @@ public class PlayMakerFsmSnapshot {
             }
 
             try {
-                if (tok.Type == JTokenType.Null) {
+                if (v is FsmArray array) {
+                    RestoreArray(array, (JObject)tok);
+                } else if (tok.Type == JTokenType.Null) {
                     v.RawValue = null;
                 } else {
                     var targetType = v.RawValue?.GetType();
