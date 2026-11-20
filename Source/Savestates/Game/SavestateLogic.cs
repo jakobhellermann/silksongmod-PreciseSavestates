@@ -402,6 +402,10 @@ public static class SavestateLogic {
 
         var timing = new LoadTiming();
         var gm = GameManager.instance;
+        if (gm.GameState == GameState.PAUSED) {
+            // unpauses synchronously on its first step
+            gm.StartCoroutine(gm.PauseGameToggle(playSound: false));
+        }
         if (!string.IsNullOrEmpty(savestate.Scene)) {
             await PrepareSceneLoad();
         } else {
