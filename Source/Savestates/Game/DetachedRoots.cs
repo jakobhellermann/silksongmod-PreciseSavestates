@@ -31,6 +31,17 @@ internal static class DetachedRoots {
         return null;
     }
 
+#if DEBUG
+    /// Joints detached before a hot reload are only known to the previous generation's registry.
+    public static void RegisterExisting() {
+        foreach (var joints in Object.FindObjectsByType<FixParentedJoints>(FindObjectsInactive.Include, FindObjectsSortMode.None)) {
+            if (joints.isActive && joints.topParent) {
+                Register(joints.selfParent, joints.topParent);
+            }
+        }
+    }
+#endif
+
     private static void Register(Transform root, Transform parent) {
         foreach (var dead in originalParents.Keys.Where(key => !key).ToList()) {
             originalParents.Remove(dead);

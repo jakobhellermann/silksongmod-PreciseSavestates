@@ -3,6 +3,7 @@ using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
 using PreciseSavestates.Modules;
+using PreciseSavestates.Savestates.Game;
 using UnityEngine;
 
 namespace PreciseSavestates.Source;
@@ -24,6 +25,9 @@ public partial class PreciseSavestatesPlugin : BaseUnityPlugin {
 
         try {
             harmony = Harmony.CreateAndPatchAll(GetType().Assembly);
+#if DEBUG
+            DetachedRoots.RegisterExisting();
+#endif
 
             savestateModule = new SavestateModule(
                 Config.Bind("Savestates", "Save", new KeyboardShortcut(KeyCode.KeypadPlus)),
