@@ -380,6 +380,8 @@ public class PlayMakerFsmSnapshot {
         targetState.Fsm = fsm;
         var activeActions = targetState.ActiveActions;
         activeActions.Clear();
+        // only cleared by OnEnter, so it can still hold an action that finished on the state's last run
+        targetState.finishedActions.Clear();
         foreach (var action in targetState.Actions) {
             if (!action.Enabled) {
                 continue;
