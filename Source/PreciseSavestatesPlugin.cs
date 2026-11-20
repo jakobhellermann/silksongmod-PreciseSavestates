@@ -30,6 +30,9 @@ public partial class PreciseSavestatesPlugin : BaseUnityPlugin {
 #endif
 
             savestateModule = new SavestateModule(
+                Config.Bind("Savestates", "Filter", SavestateFilter.All, "What new savestates capture"),
+                Config.Bind("Savestates", "Load mode", SavestateLoadMode.ReloadScene,
+                    "Without ReloadScene, a savestate in the current scene is applied in place"),
                 Config.Bind("Savestates", "Save", new KeyboardShortcut(KeyCode.KeypadPlus)),
                 Config.Bind("Savestates", "Load", new KeyboardShortcut(KeyCode.KeypadEnter)),
                 Config.Bind("Savestates", "Delete", new KeyboardShortcut(KeyCode.KeypadMinus)),

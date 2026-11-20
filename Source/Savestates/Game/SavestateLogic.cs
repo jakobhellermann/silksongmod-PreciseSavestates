@@ -38,7 +38,6 @@ public enum SavestateFilter {
 [Flags]
 public enum SavestateLoadMode {
     None = 0,
-    ResetScene = 1 << 0,
     ReloadScene = 1 << 1,
 }
 
@@ -452,12 +451,26 @@ public static class SavestateLogic {
             PrepareLoad();
         }
 
+        // a scene preload activated above (PlayerDead's respawn scene) stays loaded unless a scene load unloads it
+        var inPlace = !loadMode.HasFlag(SavestateLoadMode.ReloadScene) && savestate.Scene == gm.sceneName
+                      && CurrentAdditiveScenes().ToHashSet().SetEquals(savestate.AdditiveScenes ?? [])
+                      && !HasDestroyedTarget(savestate);
+
         var sw = Stopwatch.StartNew();
         if (hasScene) {
             RecycleSpawns();
         }
 
-        if (hasScene) {
+        if (inPlace) {
+            Log.Info("- Same scene, applying in place");
+            if (savestate.PlayerData is { } playerData) {
+                JsonUtility.FromJsonOverwrite(playerData.ToString(), PlayerData.instance);
+                InvalidatePlayerDataCaches();
+            }
+            if (savestate.SceneData is { } sceneData) {
+                JsonUtility.FromJsonOverwrite(sceneData.ToString(), SceneData.instance);
+            }
+        } else if (hasScene) {
             // TODO: is this still necessary here? check SceneAdditiveLoadConditional encounteredSongGolem
             if (savestate.PlayerData is { } earlyPlayerData) {
                 JsonUtility.FromJsonOverwrite(earlyPlayerData.ToString(), global::PlayerData.instance);
@@ -569,6 +582,29 @@ public static class SavestateLogic {
             ObjectPool.Recycle(go);
         }
         Log.Info($"- Recycled {spawned.Count} spawned objects");
+    }
+
+    // a destroyed object (a defeated boss) only comes back with a scene load
+    private static bool HasDestroyedTarget(Savestate savestate) {
+        var createdByLoad = (savestate.GameObjectSnapshots ?? [])
+            .Where(go => go.Source != null || go.Reparent != null)
+            .Select(go => go.Path)
+            .ToList();
+
+        var targets = (savestate.GameObjectSnapshots ?? []).Select(go => go.Path)
+            .Concat((savestate.ComponentSnapshots ?? []).Select(c => c.Path.SplitOnce('@')!.Value.Item1))
+            .Concat((savestate.FsmSnapshots ?? []).Select(f => f.Path))
+            .Where(path => !createdByLoad.Any(created => path == created || path.StartsWith(created + "/")))
+            .Distinct();
+
+        foreach (var path in targets) {
+            if (!ObjectUtils.LookupPath(path)) {
+                Log.Info($"- {path} no longer exists, loading the scene");
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // Additive scenes loaded alongside the active scene — everything except the active scene and DontDestroyOnLoad.

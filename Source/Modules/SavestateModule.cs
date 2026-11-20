@@ -16,8 +16,8 @@ using UnityEngine.SceneManagement;
 namespace PreciseSavestates.Modules;
 
 public class SavestateModule(
-    // ConfigEntry<SavestateFilter> currentFilter,
-    // ConfigEntry<SavestateLoadMode> loadMode,
+    ConfigEntry<SavestateFilter> currentFilter,
+    ConfigEntry<SavestateLoadMode> loadMode,
     ConfigEntry<KeyboardShortcut> openSave,
     ConfigEntry<KeyboardShortcut> openLoad,
     ConfigEntry<KeyboardShortcut> openDelete,
@@ -26,9 +26,6 @@ public class SavestateModule(
     ConfigEntry<KeyboardShortcut> quickSave,
     ConfigEntry<KeyboardShortcut> quickLoad
 ) {
-    private static readonly SavestateFilter currentFilter = SavestateFilter.All;
-    private static readonly SavestateLoadMode loadMode = SavestateLoadMode.ReloadScene;
-
     private const string SavestateLayerMain = "main";
     private const string SavestateLayerSecondary = "secondary";
 
@@ -40,7 +37,7 @@ public class SavestateModule(
     public bool CreateSavestate(string name, string slot, string? layer = null, SavestateFilter? filter = null) {
         try {
             var sw = Stopwatch.StartNew();
-            var savestate = SavestateLogic.Create(filter ?? currentFilter);
+            var savestate = SavestateLogic.Create(filter ?? currentFilter.Value);
             savestates.Save(name, savestate, slot, layer);
             Log.Info($"Created savestate {name} in {sw.ElapsedMilliseconds}ms");
 
@@ -99,7 +96,7 @@ public class SavestateModule(
     /// test corpus ship a self-contained baseline fixture instead of depending on machine-local slots.
     public bool CreateSavestateToFile(string path, SavestateFilter? filter = null) {
         try {
-            var savestate = SavestateLogic.Create(filter ?? currentFilter);
+            var savestate = SavestateLogic.Create(filter ?? currentFilter.Value);
             if (Path.GetDirectoryName(path) is { Length: > 0 } dir) {
                 Directory.CreateDirectory(dir);
             }
@@ -143,7 +140,7 @@ public class SavestateModule(
         try {
             IsLoadingSavestate = true;
 
-            await SavestateLogic.Load(savestate, loadMode, rebaseTimes);
+            await SavestateLogic.Load(savestate, loadMode.Value, rebaseTimes);
             LastLoadedGameTime = savestate.GameTime;
             LastLoadedFrameCount = savestate.GameFrameCount;
             LastLoadedRandomState = savestate.RandomState;
