@@ -385,12 +385,20 @@ public static class SavestateLogic {
         }
     }
 
-    /// Before a scene transition: no pending scene preload (see LoadCoroutineCleanup), PLAYING, no in-flight death.
+    private static readonly GameState[] unsupportedLoadStates = [
+        GameState.INACTIVE, GameState.PRIMER, GameState.MAIN_MENU, GameState.LOADING, GameState.CUTSCENE,
+    ];
+
     public static async Task PrepareSceneLoad() {
+        // a second transition would race the in-flight scene load
+        while (GameManager.instance.GameState == GameState.EXITING_LEVEL) {
+            await Task.Yield();
+        }
+
         await LoadCoroutineCleanup.WaitForPendingScenePreloads();
         await LoadCoroutineCleanup.EndPendingScenePreloads();
         var state = GameManager.instance.GameState;
-        if (state != GameState.PLAYING) {
+        if (unsupportedLoadStates.Contains(state)) {
             throw new Exception($"Can't load in state {state}");
         }
         LoadCoroutineCleanup.Run();
@@ -410,7 +418,7 @@ public static class SavestateLogic {
             await PrepareSceneLoad();
         } else {
             // An in-place apply has no transition to race a preload, so it stays synchronous
-            if (gm.GameState != GameState.PLAYING) {
+            if (unsupportedLoadStates.Contains(gm.GameState)) {
                 throw new Exception($"Can't load savestate in state {gm.GameState}");
             }
             LoadCoroutineCleanup.Run();
