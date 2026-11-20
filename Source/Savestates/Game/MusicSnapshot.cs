@@ -43,11 +43,11 @@ public class MusicSnapshot {
         var am = GameManager.instance.AudioManager;
         if (Cue != null) {
             var cue = Resources.FindObjectsOfTypeAll<MusicCue>().FirstOrDefault(c => c.name == Cue);
-            if (!cue) {
-                throw new Exception($"Music cue '{Cue}' is not loaded");
+            if (cue) {
+                am.ApplyMusicCue(cue, 0f, 0f, applySnapshot: false);
+            } else {
+                Log.Warning($"Music cue '{Cue}' is not loaded, keeping the current one");
             }
-
-            am.ApplyMusicCue(cue, 0f, 0f, applySnapshot: false);
         }
 
         if (MixerSnapshot != null) {
