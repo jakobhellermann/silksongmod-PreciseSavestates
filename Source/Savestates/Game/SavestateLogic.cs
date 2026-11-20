@@ -10,6 +10,7 @@ using HarmonyLib;
 using HutongGames.PlayMaker.Actions;
 using Newtonsoft.Json.Linq;
 using PreciseSavestates.Savestates.Snapshot;
+using PreciseSavestates.DebugSave;
 using PreciseSavestates.Source;
 using PreciseSavestates.Source.Savestates.Snapshot;
 using PreciseSavestates.Utils;
@@ -386,46 +387,73 @@ public static class SavestateLogic {
     }
 
     private static readonly GameState[] unsupportedLoadStates = [
-        GameState.INACTIVE, GameState.PRIMER, GameState.MAIN_MENU, GameState.LOADING, GameState.CUTSCENE,
+        GameState.INACTIVE, GameState.PRIMER, GameState.LOADING, GameState.CUTSCENE,
     ];
 
     public static async Task PrepareSceneLoad() {
-        // a second transition would race the in-flight scene load
+        await WaitForSceneLoadIdle();
+        PrepareLoad();
+    }
+
+    // a second transition would race the in-flight scene load
+    private static async Task WaitForSceneLoadIdle() {
         while (GameManager.instance.GameState == GameState.EXITING_LEVEL) {
             await Task.Yield();
         }
 
         await LoadCoroutineCleanup.WaitForPendingScenePreloads();
         await LoadCoroutineCleanup.EndPendingScenePreloads();
+    }
+
+    private static void PrepareLoad() {
         var state = GameManager.instance.GameState;
         if (unsupportedLoadStates.Contains(state)) {
-            throw new Exception($"Can't load in state {state}");
+            throw new Exception($"Can't load savestate in state {state}");
         }
+
         LoadCoroutineCleanup.Run();
     }
 
+    private static SaveGameData SaveGameDataOf(Savestate savestate) {
+        if (savestate.PlayerData is not { } playerData || savestate.SceneData is not { } sceneData) {
+            throw new Exception("Can't load a savestate without PlayerData and SceneData from the main menu");
+        }
+
+        var data = new SaveGameData();
+        JsonUtility.FromJsonOverwrite(playerData.ToString(), data.playerData);
+        JsonUtility.FromJsonOverwrite(sceneData.ToString(), data.sceneData);
+        return data;
+    }
+
     private static async Task LoadInner(Savestate savestate, SavestateLoadMode loadMode, bool rebaseTimes) {
-        var silent = string.IsNullOrEmpty(savestate.Scene);
+        var hasScene = !string.IsNullOrEmpty(savestate.Scene);
+        var silent = !hasScene;
         Log.Info($"Loading savestate... (scene='{savestate.Scene}', mode={loadMode})");
 
         var timing = new LoadTiming();
+        var fromMenu = GameManager.instance.GameState == GameState.MAIN_MENU;
+        if (fromMenu) {
+            await DebugSaveSlot.Enter(SaveGameDataOf(savestate));
+        }
+
         var gm = GameManager.instance;
         if (gm.GameState == GameState.PAUSED) {
             // unpauses synchronously on its first step
             gm.StartCoroutine(gm.PauseGameToggle(playSound: false));
         }
-        if (!string.IsNullOrEmpty(savestate.Scene)) {
-            await PrepareSceneLoad();
-        } else {
-            // An in-place apply has no transition to race a preload, so it stays synchronous
-            if (unsupportedLoadStates.Contains(gm.GameState)) {
-                throw new Exception($"Can't load savestate in state {gm.GameState}");
+
+        // entering from the menu leaves nothing running to wait for or clean up
+        if (!fromMenu) {
+            // don't load into a scene that is being left; scene-less applies stay synchronous
+            if (hasScene) {
+                await WaitForSceneLoadIdle();
             }
-            LoadCoroutineCleanup.Run();
+
+            PrepareLoad();
         }
 
         var sw = Stopwatch.StartNew();
-        if (!string.IsNullOrEmpty(savestate.Scene)) {
+        if (hasScene) {
             // TODO: is this still necessary here? check SceneAdditiveLoadConditional encounteredSongGolem
             if (savestate.PlayerData is { } earlyPlayerData) {
                 JsonUtility.FromJsonOverwrite(earlyPlayerData.ToString(), global::PlayerData.instance);
