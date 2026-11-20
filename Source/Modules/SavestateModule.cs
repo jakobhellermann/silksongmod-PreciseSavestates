@@ -182,7 +182,7 @@ public class SavestateModule(
         // The savestate UI pauses the game (Pause() sets acceptingInput=false), so restore it before snapshotting
         // so the captured field reflects the in-game value. Only needed for the UI path — CreateSavestate itself
         // must not mutate game state (it's also called mid-TAS, where AcceptInput would perturb playback).
-        HeroController.instance.AcceptInput();
+        HeroController.UnsafeInstance.AcceptInput();
 
         var scene = SceneManager.GetActiveScene().name;
         var defaultName = scene;
@@ -232,10 +232,10 @@ public class SavestateModule(
             uiState = value;
             if (uiState == SavestateUIState.Off) {
                 Time.timeScale = 1;
-                HeroController.instance.UnPause();
+                HeroController.UnsafeInstance.UnPause();
             } else {
                 Time.timeScale = 0;
-                HeroController.instance.Pause();
+                HeroController.UnsafeInstance.Pause();
             }
         }
     }

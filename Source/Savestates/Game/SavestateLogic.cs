@@ -58,7 +58,7 @@ public static class SavestateLogic {
             throw new Exception($"Can't create savestate in state {gm.GameState}");
         }
 
-        var player = HeroController.instance;
+        var player = HeroController.UnsafeInstance;
 
         var seen = new HashSet<Component>();
         var sceneBehaviours = new List<ComponentSnapshot>();
@@ -672,7 +672,7 @@ public static class SavestateLogic {
 
         if (savestate.AudioTableSnapshots is { Count: > 0 } audioTableSnapshots) {
             // RandomAudioClipTable assets are shared, so re-resolve them from HeroController and match by name.
-            var tables = HeroAudioTables(HeroController.instance).ToList();
+            var tables = HeroAudioTables(HeroController.UnsafeInstance).ToList();
             foreach (var snap in audioTableSnapshots) {
                 var table = tables.FirstOrDefault(t => t.name == snap.Name);
                 if (table) {
@@ -714,7 +714,7 @@ public static class SavestateLogic {
             var delta = Time.timeAsDouble - gameTime;
             Log.Info($"- Rebasing absolute times by {delta:F3}s");
             if (restoredHero) {
-                AbsoluteTimeRebase.RebaseHero(HeroController.instance, delta);
+                AbsoluteTimeRebase.RebaseHero(HeroController.UnsafeInstance, delta);
             }
             AbsoluteTimeRebase.RebaseFsms(restoredFsms, delta);
             AbsoluteTimeRebase.RebaseCurveAnimators(restoredCurveAnimators, delta);

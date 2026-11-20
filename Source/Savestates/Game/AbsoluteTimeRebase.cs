@@ -99,7 +99,7 @@ public static class AbsoluteTimeRebase {
     /// Shifts all live absolute-time state of the hero and every running FSM.
     public static void RebaseAll(double delta) {
         Log.Info($"Rebasing absolute times by {delta:F3}s");
-        if (HeroController.instance is { } hero) {
+        if (HeroController.UnsafeInstance is { } hero) {
             RebaseHero(hero, delta);
         }
         RebaseFsms(PlayMakerFSM.FsmList, delta);

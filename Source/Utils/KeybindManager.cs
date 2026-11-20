@@ -6,7 +6,7 @@ namespace PreciseSavestates.Utils;
 
 public class KeybindManager {
     public static bool IsGameInputBlocked() {
-        var hero = HeroController.SilentInstance;
+        var hero = HeroController.UnsafeInstance;
         return hero && hero.IsInputBlocked();
     }
 
