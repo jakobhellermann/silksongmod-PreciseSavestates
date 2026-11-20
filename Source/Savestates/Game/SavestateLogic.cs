@@ -454,6 +454,10 @@ public static class SavestateLogic {
 
         var sw = Stopwatch.StartNew();
         if (hasScene) {
+            RecycleSpawns();
+        }
+
+        if (hasScene) {
             // TODO: is this still necessary here? check SceneAdditiveLoadConditional encounteredSongGolem
             if (savestate.PlayerData is { } earlyPlayerData) {
                 JsonUtility.FromJsonOverwrite(earlyPlayerData.ToString(), global::PlayerData.instance);
@@ -555,6 +559,16 @@ public static class SavestateLogic {
             timing.Mark("sceneAssets");
             Log.Info($"- Restored PlayerData/SceneData for scene '{scene.name}' (before persistent objects' Start)");
         }
+    }
+
+    private static void RecycleSpawns() {
+        var spawned = ObjectPool.instance.spawnedObjects.Keys
+            .Where(go => go && !go.transform.parent)
+            .ToList();
+        foreach (var go in spawned) {
+            ObjectPool.Recycle(go);
+        }
+        Log.Info($"- Recycled {spawned.Count} spawned objects");
     }
 
     // Additive scenes loaded alongside the active scene — everything except the active scene and DontDestroyOnLoad.
